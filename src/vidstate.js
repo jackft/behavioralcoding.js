@@ -1,3 +1,5 @@
+import {formatTime} from "./utils";
+
 export class VidState {
     constructor(element, framer) {
         this.element = element;
@@ -17,7 +19,7 @@ export class VidState {
 
     updateFrameAndTime(event) {
         this.vframe.innerHTML = event.frame;
-        this.vtime.innerHTML = new Date(event.time * 1000).toISOString().substr(11, 11);
+        this.vtime.innerHTML = formatTime(event.time);
     }
 
     updatePlaybackSpeed(event) {

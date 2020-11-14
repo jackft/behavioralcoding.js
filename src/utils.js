@@ -54,3 +54,11 @@ function keyEventToClass(event) {
     const ekey = CSS.escape(event.key.toLowerCase());
     return `.key-${ekey}`;
 }
+
+export function frameToTime(framer, frame) {
+    return framer.FRAME_DURATION * frame + framer.offset;
+}
+
+export function formatTime(time) {
+    return new Date(time * 1000).toISOString().substr(11, 11);
+}

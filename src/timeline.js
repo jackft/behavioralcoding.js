@@ -2,7 +2,9 @@ import WaveformData from 'waveform-data';
 import * as d3 from "d3";
 
 const OPTS = {
-}
+    channelHeight: 50,
+    height: 50
+};
 
 class WaveformChannelData {
     constructor(data) {
@@ -15,6 +17,7 @@ export class Timeline {
         this.element = element;
         this.selection = d3.select(element);
         this.svg = null;
+        this.opts = opts;
 
         this.channelCntr = 0;
         this.state = {
@@ -27,17 +30,25 @@ export class Timeline {
             "dragStart": [],
             "drag": [],
             "dragEnd": [],
+
+            "dragInstantStart": [],
+            "dragInstant": [],
+            "dragInstantEnd": [],
         }
+
+        const bcr = this.selection.node().getBoundingClientRect();
+        const width = bcr.width;
+        this.width = width;
 
         this.timeline = this.build();
 
         this.svg.attr("width", "100%")
-                .attr("height", opts.height || "50px");
-        this.selection.style("height", opts.height || "50px");
+                .attr("height", opts.height || OPTS.height);
+        this.selection.style("height", opts.height || OPTS.height);
 
         this.x = d3.scaleLinear()
                    .domain([0, frames])
-                   .rangeRound([0, 800]);
+                   .rangeRound([0, width]);
         this.y = d3.scaleLinear()
                    .domain([0, 1])
                    .rangeRound([0, this.selection.style("height").slice(0, -2)]);
@@ -62,7 +73,11 @@ export class Timeline {
         // interactive stuff
         timeline
             .attr("pointer-events", "all")
-            .on("wheel", (event) => {this.zoom(event); event.preventDefault();})
+            .on("wheel", (event) => {
+                this.zoom(event);
+                this.update();
+                event.preventDefault();
+            })
             .on("mousemove", (event, d) => {
                 const frame = this.getFrame(d3.pointer(event)[0]);
                 this.updateCursor(frame);
@@ -77,6 +92,7 @@ export class Timeline {
                 this.update();
             })
             .call(d3.drag()
+                    .filter(()=>true) // defaults disallows ctrl+click
                     .on("start", function(event, d) {
                         _this.xDown = event.sourceEvent.clientX;
                         _this.xDrag = _this.transformation[0];
@@ -86,7 +102,6 @@ export class Timeline {
                         _this.frameupdate({frame: frame, ...event});
                     })
                     .on("drag", (event, d) => {
-                        console.log("drag");
                         const frame = this.getFrame(event.x);
                         this.drag({frame: frame, ...event});
                         this.frameupdate({frame: frame, ...event});
@@ -108,34 +123,61 @@ export class Timeline {
 
     update() {
         const _this = this;
-        this.timeline
-            .selectAll(".channel")
-            .data(this.state.channels, d=>d.id)
+        const channel= this.timeline
+                           .selectAll(".channel")
+                           .data(this.state.channels, d=>d.id)
+                           .join(
+                               enter => this.enterChannel(enter)
+                           )
+                           .call(d3.drag()
+                               .filter(()=>true) // defaults disallows ctrl+click
+                               .on("start", function(event, d) {
+                                   _this.xDown = event.sourceEvent.clientX;
+                                   _this.xDrag = _this.transformation[0];
+                                   const frame = _this.getFrame(event.x);
+                                   _this.click({frame: frame, ...event});
+                                   _this.dragStart({frame: frame, elem: this, ...event});
+                                   _this.frameupdate({frame: frame, elem: this, ...event});
+                               })
+                               .on("drag", function(event, d) {
+                                   const frame = _this.getFrame(event.x);
+                                   _this.drag({frame: frame, elem: this, ...event});
+                                   _this.frameupdate({frame: frame, elem: this, ...event});
+                               })
+                               .on("end", function(event, d) {
+                                   const frame = _this.getFrame(event.x);
+                                   _this.dragEnd({frame: frame, elem: this, ...event});
+                               })
+                           );
+        channel
+            .selectAll(".channel > .instant")
+            .data(d => d.instants, function(d, i){return i})
             .join(
-                enter => this.enterChannel(enter)
+                enter => this.enterInstants(enter),
+                update => this.updateInstants(update)
             )
             .call(d3.drag()
+                .filter(()=>true) // defaults disallows ctrl+click
                 .on("start", function(event, d) {
-                    _this.xDown = event.sourceEvent.clientX;
-                    _this.xDrag = _this.transformation[0];
                     const frame = _this.getFrame(event.x);
-                    _this.click({frame: frame, ...event});
-                    _this.dragStart({frame: frame, elem: this, ...event});
-                    _this.frameupdate({frame: frame, elem: this, ...event});
+                    _this.dragInstantStart({frame: frame, elem: this, ...event});
                 })
                 .on("drag", function(event, d) {
                     const frame = _this.getFrame(event.x);
-                    _this.drag({frame: frame, elem: this, ...event});
-                    _this.frameupdate({frame: frame, elem: this, ...event});
+                    _this.dragInstant({frame: frame, elem: this, ...event});
                 })
                 .on("end", function(event, d) {
-                    _this.xDown = undefined;
+                    const frame = _this.getFrame(event.x);
+                    _this.dragInstantEnd({frame: frame, elem: this, ...event});
                 })
-            )
-            .selectAll(".channel > .event")
-            .data(d => d.events, function(d, i){return i})
+            );
+
+        channel
+            .selectAll(".channel > .interval")
+            .data(d => d.intervals, function(d, i){return i})
             .join(
-                enter => this.enterEvents(enter)
+                enter => this.enterIntervals(enter),
+                update => this.updateIntervals(update)
             );
 
         this.timeline
@@ -170,14 +212,14 @@ export class Timeline {
                  .y1((d, i) => y(d))(max);
     }
 
-    updateChannel(enter) {
+    updateChannel(update) {
 
     }
 
     enterChannel(enter) {
         const channel = enter.append("g")
                              .attr("class", "channel")
-                             .attr("transform", (d,i) => `translate(0, ${50*i})`);
+                             .attr("transform", (d,i) => `translate(0, ${this.opts.channelHeight*i})`);
         // draw waveform
         channel.filter(d=>d.waveform != null)
                .datum(d=>d).join()
@@ -190,26 +232,123 @@ export class Timeline {
         channel.append("rect")
                .attr("x", 0)
                .attr("y", 0)
-               .attr("width", 800)
-               .attr("height", 50)
+               .attr("width", this.width)
+               .attr("height", this.opts.channelHeight)
                .attr("class", "seperator");
     }
 
-    enterEvents(enter) {
+    enterInstants(enter) {
         const event = enter.append("g")
-                           .attr("class", "event");
+                           .attr("class", "instant");
+        // for event firing
+        event.append("line")
+             .attr("class", "buffer scale-invariant")
+             .attr("x1", d=>this.x(d.frame))
+             .attr("x2", d=>this.x(d.frame) + 10)
+             .attr("y1", 25)
+             .attr("y2", 25);
+        event.append("line")
+             .attr("class", "buffer")
+             .attr("x1", d=>this.x(d.frame))
+             .attr("x2", d=>this.x(d.frame))
+             .attr("y1", 5)
+             .attr("y2", 45);
+
         event.append("line")
               .attr("x1", d=>this.x(d.frame))
               .attr("x2", d=>this.x(d.frame))
               .attr("y1", 5)
               .attr("y2", 45);
         event.append("line")
+             .attr("class", "scale-invariant")
              .attr("x1", d=>this.x(d.frame))
-             .attr("x2", d=>this.x(d.frame) + 20)
+             .attr("x2", d=>this.x(d.frame) + 10)
              .attr("y1", 25)
              .attr("y2", 25);
-             
+
+        return event;
     }
+
+    updateInstants(update) {
+        update.selectAll("line.scale-invariant")
+              .attr("x1", d=>this.x(d.frame))
+              .attr("x2", d=>this.x(d.frame) + 10/(this.zoomCoef**this.zoomFactor))
+              .attr("y1", 25)
+              .attr("y2", 25);
+        
+        update.selectAll("line:not(.scale-invariant)")
+              .attr("x1", d=>this.x(d.frame))
+              .attr("x2", d=>this.x(d.frame))
+              .attr("y1", 5)
+              .attr("y2", 45);
+
+        return update;
+    }
+
+    enterIntervals(enter) {
+        const interval = enter.append("g")
+                              .attr("class", "interval");
+        interval.append("rect")
+                .attr("class", "scale-invariant")
+                .attr("x", d=>this.x(d.start))
+                .attr("y", 3)
+                .attr("height", 44)
+                .attr("width", d=>this.x(d.end - d.start));
+
+        // for event firings
+        interval.append("line")
+                .attr("class", "buffer start")
+                .attr("x1", d=>this.x(d.start))
+                .attr("x2", d=>this.x(d.start))
+                .attr("y1", 3)
+                .attr("y2", 47);
+
+        interval.append("line")
+                .attr("class", "buffer end")
+                .attr("x1", d=>this.x(d.end))
+                .attr("x2", d=>this.x(d.end))
+                .attr("y1", 3)
+                .attr("y2", 47);
+
+        interval.append("line")
+                .attr("class", "start")
+                .attr("x1", d=>this.x(d.start))
+                .attr("x2", d=>this.x(d.start))
+                .attr("y1", 3)
+                .attr("y2", 47);
+                
+        interval.append("line")
+                .attr("class", "end")
+                .attr("x1", d=>this.x(d.end))
+                .attr("x2", d=>this.x(d.end))
+                .attr("y1", 3)
+                .attr("y2", 47);
+
+        return interval;
+    }
+
+    updateIntervals(update) {
+        update.select("rect")
+              .attr("x", d=>this.x(d.start))
+              .attr("y", 3)
+              .attr("height", 44)
+              .attr("width", d=>this.x(d.end - d.start));
+
+        update.selectAll("line.start")
+              .attr("x1", d=>this.x(d.start))
+              .attr("x2", d=>this.x(d.start))
+              .attr("y1", 3)
+              .attr("y2", 47);
+        
+        update.selectAll("line.end")
+              .attr("x1", d=>this.x(d.end))
+              .attr("x2", d=>this.x(d.end))
+              .attr("y1", 3)
+              .attr("y2", 47);
+
+        return update;
+    }
+
 
     updateIndex(frame) {
         const i = this.state.indexes.findIndex(x=>x.type == "index");
@@ -234,13 +373,18 @@ export class Timeline {
         if (waveform != null) {
             waveform =new WaveformData.create(waveform);
         }
-        const events = data.events || []
         this.state.channels.push({id: this.channelCntr++,
                                   name: name,
                                   waveform: waveform,
-                                  events: events});
+                                  instants: data.instants || [],
+                                  intervals: data.intervals || []
+                                });
         this.update();
         return this;
+    }
+
+    eventToChannel(event) {
+        return this.state.channels[event.subject.id];
     }
 
     //--------------------------------------------------------------------------
@@ -266,6 +410,18 @@ export class Timeline {
         this.events["dragEnd"].forEach(f => f(event))
     }
 
+
+    dragInstantStart(event) {
+        this.events["dragInstantStart"].forEach(f => f(event))
+    }
+
+    dragInstant(event) {
+        this.events["dragInstant"].forEach(f => f(event))
+    }
+
+    dragInstantEnd(event) {
+        this.events["dragInstantEnd"].forEach(f => f(event))
+    }
 
     //--------------------------------------------------------------------------
     // Listeners
@@ -306,7 +462,7 @@ export class Timeline {
 
     zoomHelper(event) {
         // if somehow wheel fires with no delta, do nothing
-        if (event.deltaY == 0) return;
+        if (event.deltaY == 0) return this.transformation;
         const [xOld, zOld] = this.transformation;
         // update the zoom factor
         const direction = event.deltaY < 0
