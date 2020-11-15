@@ -44,7 +44,6 @@ export class Eventer {
         // State
         ////////////////////////////////////////////////////////////////////////
         this.state = {
-            channels: config.channels || [],
             instants: [],
             intervals: [],
 
@@ -55,20 +54,10 @@ export class Eventer {
             instantIdCounter: 0,
             intervalIdCounter: 0,
 
-            currentEventIdx: null,
-            currentInvervalIdx: null,
-            currentChannelIdx: 1,
-
             undoStack: [],
             redoStack: [],
             mode: eventerEnum.INSTANT
         };
-        if (this.state.channels.length == 0)
-            this.state.currentChannel = null;
-        else if (this.state.channels.length == 1)
-            this.state.currentChannel = this.state.channels[0];
-        else
-            this.state.currentChannel = this.state.channels[1];
         ////////////////////////////////////////////////////////////////////////
         // Set up
         ////////////////////////////////////////////////////////////////////////
@@ -205,6 +194,8 @@ export class Eventer {
           .attr("class", "channel-pointer")
           .text("👉")
           .style("position", "absolute");
+
+        this.state.currentChannel = this.timeline.state.channels[1];
         this.changeChannel();
     }
 
@@ -214,38 +205,45 @@ export class Eventer {
     }
 
     tieEventsTogether() {
+        ////////////////////////////////////////////////////////////////////////
+        //
+        ////////////////////////////////////////////////////////////////////////
         this.framer.addEventListener("frameupdate", (event) => {
             this.timeline.updateIndex(event.frame);
         });
+        ////////////////////////////////////////////////////////////////////////
+        //
+        ////////////////////////////////////////////////////////////////////////
         this.timeline.addEventListener("dragStart", (event) => {
+            console.log(this.state);
+            console.log(this.timeline.state);
+            if (event.elem.classList.contains("channel") && event.subject.id != 0) {
+                const channel = event.subject;
+                this.selectChannel(channel);
+            }
             if (event.sourceEvent.shiftKey) {
                 this.timeline.pan(event);
                 this.timeline.timeline.classed("grabbing", true);
             }
             else if (event.sourceEvent.ctrlKey) {
                 if (this.state.mode == eventerEnum.INSTANT) {
-                    this.createEvent(event);
-                    this.state.currentEventIdx = this.instantIdCounter;
-                    this._frame = event.frame;
+                    const frame = event.frame;
+                    const channel = event.subject;
+                    const instant = this.createInstant(frame, channel);
+                    this.selectInstant(instant);
                     this.timeline.update();
                     this.updateEventTable();
+                    orderElements(this.state.mode);
                 }
                 else if (this.state.mode == eventerEnum.INTERVAL) {
-                    this._intervalCreator = {
-                        id: ++this.intervalIdCounter,
-                        channel: event.subject.id,
-                        down: event.frame,
-                        created: false,
-                        start: event.frame,
-                        end: undefined
-                    };
-                    this.createInterval(this._intervalCreator);
+                    const frame = event.frame;
+                    const channel = event.subject;
+                    const interval = this.createInterval(frame, channel);
+                    this.selectInterval(interval);
                     this.timeline.update();
+                    this.updateEventTable();
+                    orderElements(this.state.mode);
                 }
-            }
-            else if (event.elem.classList.contains("channel") && event.subject.id != 0) {
-                this.state.currentChannelIdx = event.subject.id;
-                this.changeChannel();
             }
         });
         this.timeline.addEventListener("drag", (event) => {
@@ -254,26 +252,29 @@ export class Eventer {
             }
             else if (event.sourceEvent.ctrlKey) {
                 if (this.state.mode == eventerEnum.INSTANT) {
-                    if (this.state.currentEventIdx !== null && this._frame === undefined) {
-                        console.log("HI");
-                        console.log(this._frame);
-                        const instant = this.state.instants[this.state.instants.findIndex(x => x.id == this.state.currentEventIdx)];
-                        this.editInstantFrame(instant, this._frame, event.frame);
+                    if (this.state.currentInstant !== null) {
+                        // not supposed to be permanent
+                        const frame = event.frame;
+                        this.state.currentInstant.frame = frame;
                         this.timeline.update();
                         this.updateEventTable();
                     }
                 }
                 else if (this.state.mode == eventerEnum.INTERVAL) {
-                    if (event.frame > this._intervalCreator.down) {
-                        this._intervalCreator.start = this._intervalCreator.down;
-                        this._intervalCreator.end = event.frame;
+                    if (this.state.currentInterval != null) {
+                        const interval = this.state.currentInterval;
+                        interval.dragged = true;
+                        if (event.frame > interval.down) {
+                            interval.start = interval.down;
+                            interval.end = event.frame;
+                        }
+                        else {
+                            interval.end = interval.down;
+                            interval.start = event.frame;
+                        }
+                        this.timeline.update();
+                        this.updateEventTable();
                     }
-                    else {
-                        this._intervalCreator.end = this._intervalCreator.down;
-                        this._intervalCreator.start = event.frame;
-                    }
-                    this.editIntervalFrame(this._intervalCreator);
-                    this.timeline.update();
                 }
             }
             else if (this.framer.getFrame() != event.frame) {
@@ -285,27 +286,48 @@ export class Eventer {
             if (event.sourceEvent.shiftKey) {
                 this.timeline.timeline.classed("grabbing", false);
             }
+            else if (event.sourceEvent.ctrlKey) {
+            }
             else if (this.framer.getFrame() != event.frame) {
                 this.framer.setFrame(event.frame);
                 this.timeline.updateIndex(event.frame);
             }
-            this._frame = null;
+            // clean up from dragging a newly created instant or interval
+            if (this.state.currentInstant != null) {
+                if (this.state.currentInstant.down != null) {
+                    if (this.state.currentInstant.down != this.state.currentInstant.frame) {
+                        this.editInstant(this.state.currentInstant, event.frame);
+                        this.timeline.updateIndex(event.frame);
+                        this.updateEventTable();
+                    }
+                    this.state.currentInstant.down = null;
+                    this.selectInstant(this.state.currentInstant);
+                }
+            }
+            if (this.state.currentInterval != null) {
+                const interval = this.state.currentInterval;
+                if (interval.down != null && interval.dragged) {
+                    const start = Math.min(event.frame, interval.down);
+                    const end = Math.max(event.frame, interval.down);
+                    this.editInterval(interval, start, end);
+                    this.timeline.updateIndex(event.frame);
+                    this.updateEventTable();
+                }
+                interval.down = null;
+                interval.dragged = false;
+                this.selectInterval(this.state.currentInterval);
+            }
         });
-
+        ////////////////////////////////////////////////////////////////////////
+        //
+        ////////////////////////////////////////////////////////////////////////
         this.timeline.addEventListener("dragInstantStart", (event) => {
             if (event.sourceEvent.ctrlKey) {
-                this._frame = event.subject.frame;
-                console.log(event, this._frame)
-                d3.selectAll(".eventcell")
-                  .classed("selected", false)
-                  .filter(function(d) {return d.id == event.subject.id;})
-                  .classed("selected", true);
-                d3.selectAll(".event")
-                 .classed("selected", false);
-                d3.select(event.elem)
-                  .classed("selected", true)
-                  .style("cursor", "grabbing");
-                this.state.currentEventIdx = event.subject.id;
+                this.selectInstant(event.subject);
+                const instant = event.subject;
+                const frame = event.frame;
+                instant.down = frame;
+                instant.dragged = false;
             }
             else if (this.framer.getFrame() != event.frame) {
                 this.framer.setFrame(event.frame);
@@ -314,29 +336,136 @@ export class Eventer {
         });
         this.timeline.addEventListener("dragInstant", (event) => {
             if (event.sourceEvent.ctrlKey) {
-                console.log(event, this._frame)
-                event.subject.frame = event.frame;
+                const instant = event.subject;
+                const frame = event.frame;
+                instant.frame = frame;
+                instant.dragged = true;
                 this.timeline.update();
                 this.updateEventTable();
-                this.framer.setFrame(event.frame);
-                this.timeline.updateIndex(event.frame);
-                this._frame_dragged = true;
             }
         });
         this.timeline.addEventListener("dragInstantEnd", (event) => {
-            if (this._frame !== undefined && this._frame_dragged) {
-                console.log(event, this._frame, event.frame)
-                this.editInstantFrame(event.subject, this._frame, event.frame);
-                this.framer.setFrame(event.frame);
+            const instant = event.subject;
+            if (instant.down != instant.frame && instant.dragged) {
+                this.editInstant(instant, event.frame);
                 this.timeline.updateIndex(event.frame);
+                this.updateEventTable();
             }
             d3.select(event.elem)
               .style("cursor", undefined);
-            this._frame = undefined;
-            this._frame_dragged = false;
+            instant.down = null;
+            instant.dragged = false;
+        });
+        ////////////////////////////////////////////////////////////////////////
+        //
+        ////////////////////////////////////////////////////////////////////////
+
+        this.timeline.addEventListener("dragIntervalStart", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                const interval = event.subject;
+                interval.down = event.frame;                
+                interval.downstart = interval.start;
+                interval.downend = interval.end;
+                this.selectInterval(interval);
+            }
+            else {
+                const channel = event.subject.channel;
+                this.selectChannel(channel);
+                this.framer.setFrame(event.frame);
+                this.timeline.updateIndex(event.frame);
+            }
+        });
+        this.timeline.addEventListener("dragInterval", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                if (this.state.currentInterval != null) {
+                    this.state.currentInterval.dragged = true;
+                    const diff = event.frame - this.state.currentInterval.down;
+                    this.state.currentInterval.start = this.state.currentInterval.downstart + diff;
+                    this.state.currentInterval.end = this.state.currentInterval.downend + diff;
+                    this.timeline.update();
+                    this.updateEventTable();
+                }
+            }
+        });
+        this.timeline.addEventListener("dragIntervalEnd", (event) => {
+            if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
+                const start = this.state.currentInterval.start;
+                const end = this.state.currentInterval.end;
+                this.editInterval(this.state.currentInterval, start, end);
+                this.state.currentInterval.dragged = false;
+                this.state.currentInterval.down = undefined;                
+                this.state.currentInterval.downstart = undefined;
+                this.state.currentInterval.downend = undefined;
+                this.timeline.update();
+                this.updateEventTable();
+            }
+        });
+
+        this.timeline.addEventListener("dragIntervalLeftStart", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                const interval = event.subject;
+                interval.down = event.frame;
+                interval.downstart = interval.start;
+                interval.downend = interval.end;
+                this.selectInterval(interval);
+            }
+        });
+        this.timeline.addEventListener("dragIntervalLeft", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                console.log(this.state.currentInterval);
+                if (this.state.currentInterval != null) {
+                    this.state.currentInterval.dragged = true;
+                    this.state.currentInterval.start = event.frame;
+                    this.timeline.update();
+                    this.updateEventTable();
+                }
+            }
+        });
+        this.timeline.addEventListener("dragIntervalLeftEnd", (event) => {
+            if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
+                const interval = this.state.currentInterval;
+                this.editInterval(this.state.currentInterval, interval.start, interval.end);
+                interval.dragged = false;
+                interval.down = undefined;                
+                interval.downstart = undefined;
+                interval.downend = undefined;
+            }
         });
 
 
+        this.timeline.addEventListener("dragIntervalRightStart", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                const interval = event.subject;
+                interval.down = event.frame;
+                interval.downstart = interval.start;
+                interval.downend = interval.end;
+                this.selectInterval(interval);
+            }
+        });
+        this.timeline.addEventListener("dragIntervalRight", (event) => {
+            if (event.sourceEvent.ctrlKey) {
+                console.log(this.state.currentInterval);
+                if (this.state.currentInterval != null) {
+                    this.state.currentInterval.dragged = true;
+                    this.state.currentInterval.end = event.frame;
+                    this.timeline.update();
+                    this.updateEventTable();
+                }
+            }
+        });
+        this.timeline.addEventListener("dragIntervalRightEnd", (event) => {
+            if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
+                const interval = this.state.currentInterval;
+                this.editInterval(this.state.currentInterval, interval.start, interval.end);
+                interval.dragged = false;
+                interval.down = undefined;                
+                interval.downstart = undefined;
+                interval.downend = undefined;
+            }
+        });
+        ////////////////////////////////////////////////////////////////////////
+        //
+        ////////////////////////////////////////////////////////////////////////
         this.timeline.addEventListener("click", (event) => {
             if (event.sourceEvent.shiftKey) {
             }
@@ -515,20 +644,18 @@ export class Eventer {
                     else if (this.state.mode == eventerEnum.INTERVAL) {
                         this.state.mode = eventerEnum.INSTANT;
                     }
+                    orderElements(this.state.mode);
+                    console.log("HI");
                     document.querySelector(".emode").innerText = this.state.mode;
                     break;
 
                 case "delete":
-                    if (this.state.currentEventIdx !== null) {
-                        const instantIdx = this.state.instants.findIndex(
-                            e => e.id == this.state.currentEventIdx
-                        );
-                        this.state.instants[instantIdx].channelId = this.state.instants[instantIdx].channel;
-                        this.deleteInstant(this.state.instants[instantIdx]);
+                    if (this.state.currentInstant !== null) {
+                        this.deleteInstant(this.state.currentInstant);
                         this.timeline.update();
                         this.updateEventTable();
                     }
-                    else if (this.state.currentInvervalIdx !== null) {
+                    else if (this.state.currentInterval !== null) {
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -564,36 +691,14 @@ export class Eventer {
                 // maybe update class selection, and if so reset selection indicator
                 const cls = classMap[ekey];
                 if (cls === undefined) return;
-                const _class = cls.class;
                 const frame = this.framer.getFrame();
-                this.createKeyEvent({
-                    frame: frame,
-                    channel: this.state.currentChannelIdx,
-                    id: ++this.eventIdCounter,
-                    class: _class
-                });
-                this.state.currentEventIdx = this.eventIdCounter;
+                const channel = this.state.currentChannel;
+                const clazz = cls.class;
+                const interval = this.createInstant(frame, channel, clazz);
+                this.selectInterval(interval);
                 this.timeline.update();
                 this.updateEventTable();
-            }
-            else if (this.state.mode == eventerEnum.INTERVAL) {
-                // animate key references
-                const ekey = CSS.escape(event.key.toLowerCase());
-                const key = document.querySelectorAll(`.key-${ekey}`);
-                // maybe update class selection, and if so reset selection indicator
-                const cls = classMap[ekey];
-                if (cls === undefined) return;
-                const _class = cls.class;
-                const frame = this.framer.getFrame();
-
-                this.createKeyInterval({
-                    frame: frame,
-                    channel: this.state.currentChannelIdx,
-                    id: ++this.eventIdCounter,
-                    class: _class
-                });
-                this.timeline.update();
-                this.updateEventTable();
+                orderElements(this.state.mode);
             }
         });
         return this;
@@ -604,24 +709,20 @@ export class Eventer {
     //--------------------------------------------------------------------------
 
     channelUp() {
-        this.state.currentChannelIdx = Math.max(
-            1,
-            this.state.currentChannelIdx - 1
-        );
+        const i = Math.max(1, this.state.currentChannel.id - 1);
+        this.state.currentChannel = this.timeline.state.channels[i];
         this.changeChannel();
     }
 
     channelDown() {
-        this.state.currentChannelIdx = Math.min(
-            this.state.currentChannelIdx + 1,
-            this.state.channels.length
-        );
+        const i = Math.min(this.timeline.state.channels.length -1, this.state.currentChannel.id + 1);
+        this.state.currentChannel = this.timeline.state.channels[i];
         this.changeChannel();
     }
 
     changeChannel() {
         const bcr = document
-                  .querySelector(`.channel:nth-child(${this.state.currentChannelIdx + 1})`)
+                  .querySelector(`.channel:nth-child(${this.state.currentChannel.id + 1})`)
                   .getBoundingClientRect();
         const height = document.querySelector(".channel-pointer").getBoundingClientRect().height;
 
@@ -632,99 +733,149 @@ export class Eventer {
 
     }
 
+    ////////////////////////////////////////////////////////////////////////////
+    //
+    ////////////////////////////////////////////////////////////////////////////
+    deselectInstant() {
+        this.state.currentInstant = null;
+        d3.selectAll(".eventcell")
+          .classed("selected", false);
+
+        d3.selectAll(".instant")
+          .classed("selected", false);
+    }
+
+    deselectInterval() {
+        this.state.currentInterval = null;
+        d3.selectAll(".interval")
+          .classed("selected", false);
+    }
+
+    selectInstant(instant) {
+        this.state.currentInstant = instant;
+        d3.selectAll(".eventcell")
+          .classed("selected", false)
+          .filter(function(d) {return d.id == instant.id;})
+          .classed("selected", true);
+
+        d3.selectAll(".instant")
+          .classed("selected", false)
+          .filter(function(d) {return d.id == instant.id;})
+          .classed("selected", true);
+        this.deselectInterval()
+    }
+
+    selectInterval(interval) {
+        d3.selectAll(".interval")
+          .classed("selected", false)
+          .filter(function(d) {return d.id == interval.id;})
+          .classed("selected", true);
+        this.state.currentInterval = interval;
+        this.deselectInstant()
+    }
+
+    selectChannel(channel) {
+        this.state.currentChannel = channel;
+        this.changeChannel(channel);
+    }
+
+    //--------------------------------------------------------------------------
+
+    createInstant(frame, channel, clazz) {
+        const instant = {id: ++this.instantIdCounter,
+                         down: frame,
+                         frame: frame,
+                         channel: channel,
+                         clazz: clazz};
+        const action = {type: "createInstant", instant: instant};
+        this.do(action);
+        return instant;
+    }
+
+    createInterval(frame, channel, clazz) {
+        const interval = {id: ++this.intervalIdCounter,
+                          down: frame,
+                          start: frame,
+                          end: null,
+                          channel: channel,
+                          clazz: clazz}
+        const action = {type: "createInterval", interval: interval};
+        this.do(action);
+        return interval;
+    }
+
+    //--------------------------------------------------------------------------
+
+    editInstant(instant, frame) {
+        const action = {
+            type: "editInstant",
+            instant: instant,
+            from: instant.down,
+            to: frame
+        };
+        this.do(action)
+        return instant;
+    }
+
+    editInterval(interval, start, end) {
+        const action = {
+            type: "editInterval",
+            interval: interval,
+            startfrom: interval.downstart,
+            startto: start,
+            endfrom: interval.downend,
+            endto: end
+        };
+        this.do(action)
+        return interval;
+    }
+
+    //--------------------------------------------------------------------------
+
+    deleteInstant(instant) {
+        const action = {type: "deleteInstant",
+                        instant: instant};
+        this.do(action);
+    }
+
     //--------------------------------------------------------------------------
     // Stack Tracked Actions
     //--------------------------------------------------------------------------
-    createEvent(event) {
-        const channelId = event.subject.id;
-        const e = {frame: event.frame, channelId: channelId, channel: this.timeline.state.channels[channelId].name, id: ++this.eventIdCounter}
-        const action = {type: "create", channel: channelId, event: e};
-        this.do(action);
-    }
-
-    createKeyEvent(event) {
-        const action = {type: "create", channel: event.channel, event: event};
-        this.do(action);
-    }
-
-    createInterval(interval) {
-        console.log("create interval");
-        const action = {type: "createInterval",
-                        channel: interval.channel,
-                        interval: interval};
-        this.do(action);
-    }
-
-    createKeyInterval(event) {
-
-    }
-
-    editInstantFrame(event, fromFrame, toFrame) {
-        const action = {type: "editFrame",
-                        event: event,
-                        fromFrame: fromFrame,
-                        toFrame: toFrame,};
-        this.do(action);
-    }
-
-    editIntervalFrame(interval) {
-        const action = {type: "editIntervalFrame",
-                        channel: interval.channel,
-                        interval: interval};
-        this.do(action);
-    }
-
-    deleteInstant(event) {
-        const action = {type: "delete",
-                        channel: event.channelId,
-                        event: event}
-        this.do(action);
-    }
 
     forwardAction(action) {
         switch (action.type) {
-            case "create":
-                // timeline
-                this.timeline
-                    .state
-                    .channels[action.channel]
-                    .instants
-                    .push(action.event);
-                // table
-                this.state.instants.push(action.event);
+            case "createInstant":
+                this.timeline.state
+                    .channels[action.instant.channel.id]
+                    .instants.push(action.instant);
+                this.state.instants.push(action.instant);
                 break;
-            case "editFrame":
-                //timeline & table
-                action.event.frame = action.toFrame;
-                break;
-            case "delete":
-                console.log(this.timeline.state.channels, action);
-                // timeline
-                const channel = this.timeline
-                                    .state
-                                    .channels[action.channel];
-                let instantIdx = channel.instants.findIndex(
-                    e => e.id == action.event.id
-                );
-                channel.instants.splice(instantIdx, 1);
-                // table
-                instantIdx = this.state.instants.findIndex(
-                    e => e.id == action.event.id
-                );
-                this.state.instants.splice(instantIdx, 1);
-
             case "createInterval":
-                console.log(action);
-                this.timeline
-                    .state
-                    .channels[action.channel]
-                    .intervals
-                    .push(action.interval);
+                this.timeline.state
+                    .channels[action.interval.channel.id]
+                    .intervals.push(action.interval);
+                this.state.intervals.push(action.interval);
                 break;
-            case "editIntervalFrame":
+            case "editInstant":
+                action.instant.frame = action.to;
+                break;
+            case "editInterval":
+                action.interval.start = action.startto;
+                action.interval.end = action.endto;
+                break;
+            case "deleteInstant": {
+                let channel = this.timeline.state.channels[action.instant.channel.id];
+                let idx = channel.instants.findIndex(
+                    instant => instant.id == action.instant.id
+                );
+                channel.instants.splice(idx, 1);
                 //
+                idx = this.state.instants.findIndex(
+                    instant => instant.id == action.instant.id
+                );
+                this.state.instants.splice(idx, 1);
                 break;
-
+            }
             default:
                 break;
         }
@@ -732,34 +883,45 @@ export class Eventer {
 
     reverseAction(action) {
         switch (action.type) {
-            case "create":
-                // timeline
-                const channel = this.timeline
-                                    .state
-                                    .channels[action.channel];
-                let eventIdx = channel.instants.findIndex(
-                    e => e.id == action.event.id
+            case "createInstant": {
+                let channel = this.timeline.state.channels[action.instant.channel.id];
+                let idx = channel.instants.findIndex(
+                    instant => instant.id == action.instant.id
                 );
-                channel.instants.splice(eventIdx, 1);
-                // table
-                eventIdx = this.state.instants.findIndex(
-                    e => e.id == action.event.id
+                channel.instants.splice(idx, 1);
+                //
+                idx = this.state.instants.findIndex(
+                    instant => instant.id == action.instant.id
                 );
-                this.state.instants.splice(eventIdx, 1);
+                this.state.instants.splice(idx, 1);
                 break;
-            case "editFrame":
-                //timeline & table
-                action.event.frame = action.fromFrame;
-            case "delete":
-                // timeline
-                this.timeline
-                    .state
-                    .channels[action.channel]
-                    .instants
-                    .push(action.event);
-                // table
-                this.state.instants.push(action.event);
+            }
+            case "createInterval": {
+                let channel = this.timeline.state.channels[action.interval.channel.id];
+                let idx = channel.intervals.findIndex(
+                    interval => interval.id == action.interval.id
+                );
+                channel.intervals.splice(idx, 1);
+                //
+                idx = this.state.intervals.findIndex(
+                    interval => interval.id == action.interval.id
+                );
+                this.state.intervals.splice(idx, 1);
                 break;
+            }
+            case "editInstant":
+                action.instant.frame = action.from;
+                break;
+            case "editInterval":
+                action.interval.start = action.startfrom;
+                action.interval.end = action.endfrom;
+                break;
+            case "deleteInstant": {
+                this.timeline.state
+                    .channels[action.instant.channel.id]
+                    .instants.push(action.instant);
+                this.state.instants.push(action.instant);
+            }
             default:
                 break;
         }
@@ -831,7 +993,7 @@ export class Eventer {
             .attr("class", "echannel")
             .text("channel: ")
             .append("span")
-            .text(d => d.channel);
+            .text(d => d.channel.name);
         cell.append("div")
             .attr("class", "eclass")
             .text("class: ")
@@ -859,7 +1021,7 @@ export class Eventer {
         update.selectAll(".eventcell .eclass span")
               .text(d => d.class);
         update.selectAll(".eventcell .echannel span")
-              .text(d => d.channel);
+              .text(d => d.channel.name);
     }
 
     //--------------------------------------------------------------------------
@@ -899,4 +1061,22 @@ export class Eventer {
 }
 
 
-
+function orderElements(mode) {
+    const reversed = mode == eventerEnum.INTERVAL;
+    document.querySelectorAll(".channel")
+            .forEach(channel => {
+                [...channel.children]
+                .filter(elem => {return elem.classList.contains("instant") ||
+                                        elem.classList.contains("interval");
+                })
+                .sort(reversed
+                     ? (a, b) => a.classList.contains("instant") <= b.classList.contains("instant")
+                     : (a, b) => a.classList.contains("instant") > b.classList.contains("instant")
+                )
+                .forEach(elem => channel.appendChild(elem));
+            })
+    d3.selectAll(".instant")
+      .classed("offmode", mode !== eventerEnum.INSTANT);
+    d3.selectAll(".interval")
+      .classed("offmode", mode !== eventerEnum.INTERVAL);
+}

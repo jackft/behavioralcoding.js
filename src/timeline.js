@@ -34,6 +34,18 @@ export class Timeline {
             "dragInstantStart": [],
             "dragInstant": [],
             "dragInstantEnd": [],
+
+            "dragIntervalLeftStart": [],
+            "dragIntervalLeft": [],
+            "dragIntervalLeftEnd": [],
+
+            "dragIntervalRightStart": [],
+            "dragIntervalRight": [],
+            "dragIntervalRightEnd": [],
+
+            "dragIntervalStart": [],
+            "dragInterval": [],
+            "dragIntervalEnd": [],
         }
 
         const bcr = this.selection.node().getBoundingClientRect();
@@ -172,13 +184,62 @@ export class Timeline {
                 })
             );
 
-        channel
+        const interval = channel
             .selectAll(".channel > .interval")
             .data(d => d.intervals, function(d, i){return i})
             .join(
                 enter => this.enterIntervals(enter),
                 update => this.updateIntervals(update)
             );
+
+        interval.selectAll("line.left")
+                .call(d3.drag()
+                    .filter(()=>true)
+                    .on("start", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalLeftStart({frame: frame, elem: this, ...event});
+                    })
+                    .on("drag", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalLeft({frame: frame, elem: this, ...event});
+                    })
+                    .on("end", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalLeftEnd({frame: frame, elem: this, ...event});
+                    })
+                );
+        interval.selectAll("line.right")
+                .call(d3.drag()
+                    .filter(()=>true)
+                    .on("start", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalRightStart({frame: frame, elem: this, ...event});
+                    })
+                    .on("drag", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalRight({frame: frame, elem: this, ...event});
+                    })
+                    .on("end", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalRightEnd({frame: frame, elem: this, ...event});
+                    })
+                );
+        interval.selectAll("rect")
+                .call(d3.drag()
+                    .filter(()=>true)
+                    .on("start", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalStart({frame: frame, elem: this, ...event});
+                    })
+                    .on("drag", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragInterval({frame: frame, elem: this, ...event});
+                    })
+                    .on("end", function(event, d) {
+                        const frame = _this.getFrame(event.x);
+                        _this.dragIntervalEnd({frame: frame, elem: this, ...event});
+                    })
+                );
 
         this.timeline
             .selectAll(".tl-main > line")
@@ -297,28 +358,28 @@ export class Timeline {
 
         // for event firings
         interval.append("line")
-                .attr("class", "buffer start")
+                .attr("class", "buffer left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
                 .attr("y1", 3)
                 .attr("y2", 47);
 
         interval.append("line")
-                .attr("class", "buffer end")
+                .attr("class", "buffer right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
                 .attr("y1", 3)
                 .attr("y2", 47);
 
         interval.append("line")
-                .attr("class", "start")
+                .attr("class", "left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
                 .attr("y1", 3)
                 .attr("y2", 47);
                 
         interval.append("line")
-                .attr("class", "end")
+                .attr("class", "right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
                 .attr("y1", 3)
@@ -334,13 +395,13 @@ export class Timeline {
               .attr("height", 44)
               .attr("width", d=>this.x(d.end - d.start));
 
-        update.selectAll("line.start")
+        update.selectAll("line.left")
               .attr("x1", d=>this.x(d.start))
               .attr("x2", d=>this.x(d.start))
               .attr("y1", 3)
               .attr("y2", 47);
         
-        update.selectAll("line.end")
+        update.selectAll("line.right")
               .attr("x1", d=>this.x(d.end))
               .attr("x2", d=>this.x(d.end))
               .attr("y1", 3)
@@ -421,6 +482,42 @@ export class Timeline {
 
     dragInstantEnd(event) {
         this.events["dragInstantEnd"].forEach(f => f(event))
+    }
+
+    dragIntervalStart(event) {
+        this.events["dragIntervalStart"].forEach(f => f(event))
+    }
+
+    dragInterval(event) {
+        this.events["dragInterval"].forEach(f => f(event))
+    }
+
+    dragIntervalEnd(event) {
+        this.events["dragIntervalEnd"].forEach(f => f(event))
+    }
+
+    dragIntervalLeftStart(event) {
+        this.events["dragIntervalLeftStart"].forEach(f => f(event))
+    }
+
+    dragIntervalLeft(event) {
+        this.events["dragIntervalLeft"].forEach(f => f(event))
+    }
+
+    dragIntervalLeftEnd(event) {
+        this.events["dragIntervalLeftEnd"].forEach(f => f(event))
+    }
+
+    dragIntervalRightStart(event) {
+        this.events["dragIntervalRightStart"].forEach(f => f(event))
+    }
+
+    dragIntervalRight(event) {
+        this.events["dragIntervalRight"].forEach(f => f(event))
+    }
+
+    dragIntervalRightEnd(event) {
+        this.events["dragIntervalRightEnd"].forEach(f => f(event))
     }
 
     //--------------------------------------------------------------------------
