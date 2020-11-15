@@ -656,6 +656,7 @@ export class Eventer {
                         this.updateEventTable();
                     }
                     else if (this.state.currentInterval !== null) {
+                        this.deleteInterval(this.state.currentInterval);
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -838,6 +839,12 @@ export class Eventer {
         this.do(action);
     }
 
+    deleteInterval(interval) {
+        const action = {type: "deleteInterval",
+                        interval: interval};
+        this.do(action);
+    }
+
     //--------------------------------------------------------------------------
     // Stack Tracked Actions
     //--------------------------------------------------------------------------
@@ -874,6 +881,14 @@ export class Eventer {
                     instant => instant.id == action.instant.id
                 );
                 this.state.instants.splice(idx, 1);
+                break;
+            }
+            case "deleteInterval": {
+                let channel = this.timeline.state.channels[action.interval.channel.id];
+                let idx = channel.intervals.findIndex(
+                    interval => interval.id == action.interval.id
+                );
+                channel.intervals.splice(idx, 1);
                 break;
             }
             default:
@@ -921,6 +936,14 @@ export class Eventer {
                     .channels[action.instant.channel.id]
                     .instants.push(action.instant);
                 this.state.instants.push(action.instant);
+                break;
+            }
+            case "deleteInterval": {
+                this.timeline.state
+                    .channels[action.interval.channel.id]
+                    .intervals.push(action.interval);
+                this.state.intervals.push(action.interval);
+                break;
             }
             default:
                 break;

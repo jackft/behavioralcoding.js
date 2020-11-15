@@ -73,6 +73,7 @@ export class Timeline {
 
         const z = this.zoomCoef**this.zoomFactor
         this.transformation = [0, z]; // we do not touch Y
+
     }
 
     build() {
@@ -303,12 +304,6 @@ export class Timeline {
                            .attr("class", "instant");
         // for event firing
         event.append("line")
-             .attr("class", "buffer scale-invariant")
-             .attr("x1", d=>this.x(d.frame))
-             .attr("x2", d=>this.x(d.frame) + 10)
-             .attr("y1", 25)
-             .attr("y2", 25);
-        event.append("line")
              .attr("class", "buffer")
              .attr("x1", d=>this.x(d.frame))
              .attr("x2", d=>this.x(d.frame))
@@ -320,24 +315,24 @@ export class Timeline {
               .attr("x2", d=>this.x(d.frame))
               .attr("y1", 5)
               .attr("y2", 45);
-        event.append("line")
-             .attr("class", "scale-invariant")
-             .attr("x1", d=>this.x(d.frame))
-             .attr("x2", d=>this.x(d.frame) + 10)
-             .attr("y1", 25)
-             .attr("y2", 25);
+
+        event.append("path")
+             .attr("class", "scale-invariant top-arrow")
+             .attr("d", d=>d3.line()(toparrow(this.x(d.frame), 2, 5, 5)));
+        event.append("path")
+             .attr("class", "scale-invariant bottom-arrow")
+             .attr("d", d=>d3.line()(bottomarrow(this.x(d.frame), 48, 5, 5)));
 
         return event;
     }
 
     updateInstants(update) {
-        update.selectAll("line.scale-invariant")
-              .attr("x1", d=>this.x(d.frame))
-              .attr("x2", d=>this.x(d.frame) + 10/(this.zoomCoef**this.zoomFactor))
-              .attr("y1", 25)
-              .attr("y2", 25);
-        
-        update.selectAll("line:not(.scale-invariant)")
+        update.selectAll(".scale-invariant.top-arrow")
+             .attr("d", d=>d3.line()(toparrow(this.x(d.frame), 2, 5/(this.zoomCoef**this.zoomFactor), 5)));
+        update.selectAll(".scale-invariant.bottom-arrow")
+             .attr("d", d=>d3.line()(bottomarrow(this.x(d.frame), 48, 5/(this.zoomCoef**this.zoomFactor), 5)));
+
+        update.selectAll("line")
               .attr("x1", d=>this.x(d.frame))
               .attr("x2", d=>this.x(d.frame))
               .attr("y1", 5)
@@ -608,3 +603,13 @@ export class Timeline {
     }
 
 }
+
+function bottomarrow(x, y, w=5, h=5) {
+    return [[x-w, y], [x+w, y], [x, y-h]];
+}
+
+function toparrow(x, y, w=5, h=5) {
+    return [[x-w, y], [x+w, y], [x, y+h]];
+};
+
+
