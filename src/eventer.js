@@ -144,6 +144,15 @@ export class Eventer {
                              .append("div")
                              .attr("class", "eventtable")
                              .style("position", "absolute");
+        eventtable
+            .append("datalist")
+            .attr("id", "classes")
+            .selectAll("option")
+            .data(config.classes)
+            .join(
+                enter => enter.append("option")
+                              .attr("value", d=>d.class)
+            );
         this.positionEventTable(eventtable);
         return eventtable;
     }
@@ -215,8 +224,6 @@ export class Eventer {
         //
         ////////////////////////////////////////////////////////////////////////
         this.timeline.addEventListener("dragStart", (event) => {
-            console.log(this.state);
-            console.log(this.timeline.state);
             if (event.elem.classList.contains("channel") && event.subject.id != 0) {
                 const channel = event.subject;
                 this.selectChannel(channel);
@@ -412,7 +419,6 @@ export class Eventer {
         });
         this.timeline.addEventListener("dragIntervalLeft", (event) => {
             if (event.sourceEvent.ctrlKey) {
-                console.log(this.state.currentInterval);
                 if (this.state.currentInterval != null) {
                     this.state.currentInterval.dragged = true;
                     this.state.currentInterval.start = event.frame;
@@ -444,7 +450,6 @@ export class Eventer {
         });
         this.timeline.addEventListener("dragIntervalRight", (event) => {
             if (event.sourceEvent.ctrlKey) {
-                console.log(this.state.currentInterval);
                 if (this.state.currentInterval != null) {
                     this.state.currentInterval.dragged = true;
                     this.state.currentInterval.end = event.frame;
@@ -510,8 +515,10 @@ export class Eventer {
         });
 
         document.addEventListener("keydown", (event) => {
+            if (textinpt()) {
+                return;
+            }
             const fun = keymap[CSS.escape(event.key.toLowerCase()) + event.shiftKey + event.ctrlKey] || "";
-            console.log(event.key);
             switch(fun) {
                 case "forward":
                     this.framer.stepForward();
@@ -645,18 +652,19 @@ export class Eventer {
                         this.state.mode = eventerEnum.INSTANT;
                     }
                     orderElements(this.state.mode);
-                    console.log("HI");
                     document.querySelector(".emode").innerText = this.state.mode;
                     break;
 
                 case "delete":
                     if (this.state.currentInstant !== null) {
                         this.deleteInstant(this.state.currentInstant);
+                        this.deselectInstant();
                         this.timeline.update();
                         this.updateEventTable();
                     }
                     else if (this.state.currentInterval !== null) {
                         this.deleteInterval(this.state.currentInterval);
+                        this.deselectInterval();
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -670,6 +678,9 @@ export class Eventer {
 
 
         document.addEventListener("keyup", (event) => {
+            if (textinpt()) {
+                return;
+            }
             const fun = keymap[CSS.escape(event.key.toLowerCase()) + event.shiftKey + event.ctrlKey] || "";
             switch(fun) {
                 case "grabbable":
@@ -685,6 +696,9 @@ export class Eventer {
         });
 
         document.addEventListener("keydown", (event) => {
+            if (textinpt()) {
+                return;
+            }
             if (this.state.mode == eventerEnum.INSTANT) {
                 // animate key references
                 const ekey = CSS.escape(event.key.toLowerCase());
@@ -743,7 +757,9 @@ export class Eventer {
           .classed("selected", false);
 
         d3.selectAll(".instant")
-          .classed("selected", false);
+          .classed("selected", false)
+          .selectAll(".eclass")
+          .property("readonly", true);
     }
 
     deselectInterval() {
@@ -762,7 +778,8 @@ export class Eventer {
         d3.selectAll(".instant")
           .classed("selected", false)
           .filter(function(d) {return d.id == instant.id;})
-          .classed("selected", true);
+          .classed("selected", true)
+          .property("readonly", false);
         this.deselectInterval()
     }
 
@@ -981,7 +998,6 @@ export class Eventer {
             .data(this.state.instants, d=>d.id)
             .join(enter => this.enterEvent(enter),
                   update => this.updateEvent(update));
-
         this.eventtable
             .selectAll(".eventcell")
             .sort(function(a, b){return a.frame > b.frame;})
@@ -995,7 +1011,7 @@ export class Eventer {
 
                 _this.framer.setFrame(this.__data__.frame);
                 _this.timeline.updateIndex(this.__data__.frame);
-            });
+            })
     }
 
     enterEvent(enter) {
@@ -1020,8 +1036,11 @@ export class Eventer {
         cell.append("div")
             .attr("class", "eclass")
             .text("class: ")
-            .append("span")
-            .text(d => d.class);
+            .append("input")
+            .attr("list", "classes")
+            .each(function(d) {
+                this.value = d.class === undefined ? "" : d.class;
+            });
         cell.each(function() {
             d3.selectAll(".eventcell").classed("selected", false);
             d3.select(this).classed("selected", true);
@@ -1034,6 +1053,7 @@ export class Eventer {
               .filter(function(d){return cell.node().__data__.id == d.id;})
               .classed("selected", true);
         }
+        return cell;
     }
 
     updateEvent(update) {
@@ -1102,4 +1122,9 @@ function orderElements(mode) {
       .classed("offmode", mode !== eventerEnum.INSTANT);
     d3.selectAll(".interval")
       .classed("offmode", mode !== eventerEnum.INTERVAL);
+}
+
+function textinpt() {
+    const active = document.activeElement;
+    return [...document.querySelectorAll("input")].some(e => e === active);
 }

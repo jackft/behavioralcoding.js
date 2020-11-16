@@ -164,10 +164,11 @@ export class Timeline {
                            );
         channel
             .selectAll(".channel > .instant")
-            .data(d => d.instants, function(d, i){return i})
+            .data(d => d.instants, function(d, i){return d.id})
             .join(
                 enter => this.enterInstants(enter),
-                update => this.updateInstants(update)
+                update => this.updateInstants(update),
+                exit => exit.remove()
             )
             .call(d3.drag()
                 .filter(()=>true) // defaults disallows ctrl+click
@@ -187,10 +188,12 @@ export class Timeline {
 
         const interval = channel
             .selectAll(".channel > .interval")
-            .data(d => d.intervals, function(d, i){return i})
+            .each(d => {intervalGroups(d.channel.intervals)})
+            .data(d => d.intervals, function(d, i){return d.id})
             .join(
                 enter => this.enterIntervals(enter),
-                update => this.updateIntervals(update)
+                update => this.updateIntervals(update),
+                exit => exit.remove()
             );
 
         interval.selectAll("line.left")
@@ -344,11 +347,13 @@ export class Timeline {
     enterIntervals(enter) {
         const interval = enter.append("g")
                               .attr("class", "interval");
+
+        const h = 44;
+        const m = 3;
         interval.append("rect")
-                .attr("class", "scale-invariant")
                 .attr("x", d=>this.x(d.start))
-                .attr("y", 3)
-                .attr("height", 44)
+                .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("height", d=>(h/d.groupSize) - (d.groupIndex + 1 == d.groupSize ? 0 : m))
                 .attr("width", d=>this.x(d.end - d.start));
 
         // for event firings
@@ -356,51 +361,53 @@ export class Timeline {
                 .attr("class", "buffer left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
-                .attr("y1", 3)
-                .attr("y2", 47);
+                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         interval.append("line")
                 .attr("class", "buffer right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
-                .attr("y1", 3)
-                .attr("y2", 47);
+                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         interval.append("line")
                 .attr("class", "left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
-                .attr("y1", 3)
-                .attr("y2", 47);
+                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
                 
         interval.append("line")
                 .attr("class", "right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
-                .attr("y1", 3)
-                .attr("y2", 47);
+                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         return interval;
     }
 
     updateIntervals(update) {
-        update.select("rect")
+        const h = 44;
+        const m = 3;
+        update.selectAll("rect")
               .attr("x", d=>this.x(d.start))
-              .attr("y", 3)
-              .attr("height", 44)
+              .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+              .attr("height", d=>(h/d.groupSize) - (d.groupIndex + 1 == d.groupSize ? 0 : m))
               .attr("width", d=>this.x(d.end - d.start));
 
         update.selectAll("line.left")
               .attr("x1", d=>this.x(d.start))
               .attr("x2", d=>this.x(d.start))
-              .attr("y1", 3)
-              .attr("y2", 47);
+              .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+              .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
         
         update.selectAll("line.right")
               .attr("x1", d=>this.x(d.end))
               .attr("x2", d=>this.x(d.end))
-              .attr("y1", 3)
-              .attr("y2", 47);
+              .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
+              .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         return update;
     }
@@ -612,4 +619,37 @@ function toparrow(x, y, w=5, h=5) {
     return [[x-w, y], [x+w, y], [x, y+h]];
 };
 
-
+function intervalGroups(intervals) {
+    const _intervals = intervals.sort((a, b) => a.start >= b.start);
+    const groups = [];
+    let group = []
+    let interval = null;
+    for (let i=0; i < _intervals.length; ++i) {
+        if (interval == null) {
+            interval = _intervals[i];
+            group.push(interval);
+        }
+        else if (_intervals[i].start <= interval.end) {
+            group.push(_intervals[i]);
+            if (_intervals[i].end > interval.end) {
+                interval = _intervals[i];
+            }
+        }
+        else {
+            groups.push(group);
+            interval = _intervals[i];
+            group = [interval];
+        }
+    }
+    if (group.length > 0) {
+        groups.push(group);
+    }
+    for (let j=0; j < groups.length; ++j) {
+        groups[j]
+        .sort((a, b) => a.id < b.id)
+        .forEach((interval, i) => {
+            interval.groupIndex = i;
+            interval.groupSize = groups[j].length;
+        });
+    }
+}
