@@ -1,5 +1,6 @@
 import WaveformData from 'waveform-data';
 import * as d3 from "d3";
+import { text } from 'd3';
 
 const OPTS = {
     channelHeight: 50,
@@ -350,6 +351,7 @@ export class Timeline {
 
         const h = 44;
         const m = 3;
+        const textHeight = 14;
         interval.append("rect")
                 .attr("x", d=>this.x(d.start))
                 .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
@@ -385,12 +387,19 @@ export class Timeline {
                 .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
                 .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
+        interval.append("text")
+                .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
+                .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
+                .attr("y", d=> (((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2)
+                .text("DOGGGG");
+
         return interval;
     }
 
     updateIntervals(update) {
         const h = 44;
         const m = 3;
+        const textHeight = 14;
         update.selectAll("rect")
               .attr("x", d=>this.x(d.start))
               .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
@@ -408,6 +417,28 @@ export class Timeline {
               .attr("x2", d=>this.x(d.end))
               .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
               .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+
+        const _this = this;
+        update.selectAll("text")
+              .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
+              .text(function(d){
+                  this.textContent = d.clazz;
+                  const boxHeight = (h/d.groupSize);
+                  if (this.getBoundingClientRect().height + 2 > boxHeight)
+                    return "-";
+                  const width = _this.x(d.end) - _this.x(d.start);
+                  while (this.textContent.length > 0 && this.getComputedTextLength() > width) {
+                        this.textContent = this.textContent.substr(0, this.textContent.length - 1);
+                  }
+                  return this.textContent;
+                })
+              .attr("y", function(d) {
+                const top = ((h/d.groupSize)*(d.groupIndex));
+                const bottom = (h/d.groupSize)*(d.groupIndex + 1);
+                const margin = (d.groupIndex + 1 == d.groupSize ? m : 0);
+                const textHeight = this.getBoundingClientRect().height;
+                return  (top + bottom + margin + textHeight)/2;
+              });
 
         return update;
     }

@@ -320,6 +320,15 @@ export class Eventer {
                     this.timeline.updateIndex(event.frame);
                     this.updateEventTable();
                 }
+                else {
+                    const start = Math.min(event.frame, interval.down);
+                    const end = Math.max(event.frame, interval.down);
+                    if (end - start < 2) {
+                        this.deleteInterval(interval);
+                        this.deselectInterval();
+                        return;
+                    }
+                }
                 interval.down = null;
                 interval.dragged = false;
                 this.selectInterval(this.state.currentInterval);
@@ -948,6 +957,11 @@ export class Eventer {
                     interval => interval.id == action.interval.id
                 );
                 channel.intervals.splice(idx, 1);
+                //
+                idx = this.state.intervals.findIndex(
+                    interval => interval.id == action.interval.id
+                );
+                this.state.intervals.splice(idx, 1);
                 break;
             }
             default:
@@ -1055,9 +1069,8 @@ export class Eventer {
                   .classed("selected", false)
                   .filter((d) => {return d.id == this.__data__.id;})
                   .classed("selected", true);
-
-                _this.framer.setFrame(this.__data__.frame);
-                _this.timeline.updateIndex(this.__data__.frame);
+                _this.framer.setFrame(this.__data__.frame || this.__data__.start);
+                _this.timeline.updateIndex(this.__data__.frame || this.__data__.start);
             })
     }
 
@@ -1086,7 +1099,11 @@ export class Eventer {
             .append("input")
             .attr("list", "classes")
             .each(function(d) {
-                this.value = d.class === undefined ? "" : d.class;
+                this.value = d.clazz === undefined ? "" : d.clazz;
+            })
+            .on("input", function() {
+                d3.select(this).node().__data__.clazz = this.value
+                _this.timeline.update();
             });
         cell.each(function() {
             d3.selectAll(".eventcell").classed("selected", false);
@@ -1110,7 +1127,7 @@ export class Eventer {
               .text(d => formatTime(frameToTime(this.framer, d.frame)));
         update.selectAll(".eventcell .eclass span")
               .each(function(d) {
-                  this.value = d.class === undefined ? "" : d.class;
+                  this.value = d.clazz === undefined ? "" : d.class;
               });
 
         update.selectAll(".eventcell .echannel span")
@@ -1118,9 +1135,9 @@ export class Eventer {
     }
 
     enterInterval(enter) {
-        const _this = this;
         const cell = enter.append("div")
                           .attr("class", "intervalcell clickable");
+        const _this = this;
         cell.append("div")
             .attr("class", "estart")
             .text("s.frame: ")
@@ -1152,8 +1169,13 @@ export class Eventer {
             .append("input")
             .attr("list", "classes")
             .each(function(d) {
-                this.value = d.class === undefined ? "" : d.class;
+                this.value = d.clazz === undefined ? "" : d.clazz;
+            })
+            .on("input", function() {
+                d3.select(this).node().__data__.clazz = this.value
+                _this.timeline.update();
             });
+
         cell.each(function() {
             d3.selectAll(".intervalcell").classed("selected", false);
             d3.select(this).classed("selected", true);
