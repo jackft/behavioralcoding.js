@@ -27,8 +27,8 @@ const OPTS = {
         {fun: "superEditBackward", key: "arrowleft", ctrl: true, shift: true, description: "move instant forward"},
         {fun: "superEditForward", key: "arrowright", ctrl: true, shift: true, description: "move instant backward"},
 
-        {fun: "grabbable", key: "shift", description: "grabbable"},
-        {fun: "pointable", key: "control", description: "grabbable"},
+        {fun: "grabbableShift", key: "shift", description: "grabbable"},
+        {fun: "grabbableCtrl", key: "control", description: "grabbable"},
     ]
 };
 
@@ -229,8 +229,8 @@ export class Eventer {
                 this.selectChannel(channel);
             }
             if (event.sourceEvent.shiftKey) {
+                this.timeline.timeline.style("cursor", "grabbing");
                 this.timeline.pan(event);
-                this.timeline.timeline.classed("grabbing", true);
             }
             else if (event.sourceEvent.ctrlKey) {
                 if (this.state.mode == eventerEnum.INSTANT) {
@@ -246,7 +246,8 @@ export class Eventer {
                     const frame = event.frame;
                     const channel = event.subject;
                     const interval = this.createInterval(frame, channel);
-                    this.selectInterval(interval);
+                    this.selectInterval(interval)
+                        ;
                     this.timeline.update();
                     this.updateEventTable();
                     orderElements(this.state.mode);
@@ -291,7 +292,7 @@ export class Eventer {
         });
         this.timeline.addEventListener("dragEnd", (event) => {
             if (event.sourceEvent.shiftKey) {
-                this.timeline.timeline.classed("grabbing", false);
+                this.timeline.timeline.style("cursor", "grab");
             }
             else if (event.sourceEvent.ctrlKey) {
             }
@@ -339,7 +340,7 @@ export class Eventer {
         ////////////////////////////////////////////////////////////////////////
         this.timeline.addEventListener("dragInstantStart", (event) => {
             if (event.sourceEvent.ctrlKey) {
-                this.selectInstant(event.subject);
+                this.selectInstant(event.subject).style("cursor", "move");
                 const instant = event.subject;
                 const frame = event.frame;
                 instant.down = frame;
@@ -362,13 +363,13 @@ export class Eventer {
         });
         this.timeline.addEventListener("dragInstantEnd", (event) => {
             const instant = event.subject;
+            d3.select(event.elem)
+              .style("cursor", "pointer");
             if (instant.down != instant.frame && instant.dragged) {
                 this.editInstant(instant, event.frame);
                 this.timeline.updateIndex(event.frame);
                 this.updateEventTable();
             }
-            d3.select(event.elem)
-              .style("cursor", undefined);
             instant.down = null;
             instant.dragged = false;
         });
@@ -380,7 +381,7 @@ export class Eventer {
             if (event.sourceEvent.ctrlKey) {
                 if (this.state.mode == eventerEnum.INSTANT) {
                     const frame = event.frame;
-                    const channel = event.subject;
+                    const channel = event.subject.channel;
                     const instant = this.createInstant(frame, channel);
                     this.selectInstant(instant);
                     this.timeline.update();
@@ -388,6 +389,7 @@ export class Eventer {
                     orderElements(this.state.mode);
                 }
                 if (this.state.mode == eventerEnum.INTERVAL) {
+                    d3.select(event.elem).style("cursor", "move");
                     const interval = event.subject;
                     interval.down = event.frame;                
                 interval.down = event.frame;                
@@ -428,6 +430,8 @@ export class Eventer {
             }
         });
         this.timeline.addEventListener("dragIntervalEnd", (event) => {
+            d3.select(event.elem)
+              .style("cursor", "pointer");
             if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
                 const start = this.state.currentInterval.start;
                 const end = this.state.currentInterval.end;
@@ -455,6 +459,8 @@ export class Eventer {
         });
 
         this.timeline.addEventListener("dragIntervalLeftStart", (event) => {
+            d3.select(event.elem)
+              .style("cursor", "ew-resize");
             if (event.sourceEvent.ctrlKey) {
                 const interval = event.subject;
                 interval.down = event.frame;
@@ -474,6 +480,8 @@ export class Eventer {
             }
         });
         this.timeline.addEventListener("dragIntervalLeftEnd", (event) => {
+            d3.select(event.elem)
+              .style("cursor", "pointer");
             if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
                 const interval = this.state.currentInterval;
                 this.editInterval(this.state.currentInterval, interval.start, interval.end);
@@ -486,6 +494,8 @@ export class Eventer {
 
 
         this.timeline.addEventListener("dragIntervalRightStart", (event) => {
+            d3.select(event.elem)
+              .style("cursor", "ew-resize");
             if (event.sourceEvent.ctrlKey) {
                 const interval = event.subject;
                 interval.down = event.frame;
@@ -505,6 +515,8 @@ export class Eventer {
             }
         });
         this.timeline.addEventListener("dragIntervalRightEnd", (event) => {
+            d3.select(event.elem)
+              .style("cursor", "pointer");
             if (this.state.currentInterval != null && this.state.currentInterval.dragged) {
                 const interval = this.state.currentInterval;
                 this.editInterval(this.state.currentInterval, interval.start, interval.end);
@@ -615,11 +627,14 @@ export class Eventer {
                     this.timeline.update();
                     this.updateEventTable();
                     break;
-                case "grabbable":
-                    this.timeline.timeline.classed("grab", true);
+                case "grabbableShift":
+                    this.timeline.timeline.style("cursor", "grab");
                     break;
-                case "pointable":
-                    d3.selectAll(".event").classed("point", true);
+                case "grabbableCtrl":
+                    d3.selectAll(".instant")
+                      .style("cursor", "pointer");
+                    d3.selectAll(".interval")
+                      .style("cursor", "pointer");
                     break;
                 case "channeldown":
                     this.channelDown();
@@ -729,9 +744,14 @@ export class Eventer {
             }
             const fun = keymap[CSS.escape(event.key.toLowerCase()) + event.shiftKey + event.ctrlKey] || "";
             switch(fun) {
-                case "grabbable":
-                    this.timeline.timeline.classed("grab", false);
-                    this.timeline.timeline.classed("grabbing", false);
+                case "grabbableShift":
+                    this.timeline.timeline.style("cursor", null);
+                    break;
+                case "grabbableCtrl":
+                    d3.selectAll(".instant")
+                      .style("cursor", null);
+                    d3.selectAll(".interval")
+                      .style("cursor", null);
                     break;
                 case "pointable":
                     d3.selectAll(".event").classed("point", false);
@@ -805,42 +825,48 @@ export class Eventer {
           .classed("selected", false);
 
         d3.selectAll(".instant")
-          .classed("selected", false)
-          .selectAll("input")
-          .each(function(){this.readOnly = true});
+          .classed("selected", false);
     }
 
     deselectInterval() {
         this.state.currentInterval = null;
+        d3.selectAll(".intervalcell")
+          .classed("selected", false);
+
         d3.selectAll(".interval")
           .classed("selected", false);
     }
 
     selectInstant(instant) {
+        this.deselectInterval();
+
         this.state.currentInstant = instant;
-        d3.selectAll(".eventcell")
+        d3.selectAll(".eventcell ")
           .classed("selected", false)
-          .filter(function(d) {return d.id == instant.id;})
+          .filter((d) => d == this.state.currentInstant)
           .classed("selected", true);
 
         d3.selectAll(".instant input")
           .each(function(){this.readOnly = true});
-        d3.selectAll(".instant")
+        return d3.selectAll(".instant")
           .classed("selected", false)
           .filter(function(d) {return d.id == instant.id;})
-          .classed("selected", true)
-          .selectAll("input")
-          .each(function(){this.readOnly = false});
-        this.deselectInterval()
+          .classed("selected", true);
     }
 
     selectInterval(interval) {
-        d3.selectAll(".interval")
+        this.deselectInstant();
+        this.state.currentInterval = interval;
+
+        d3.selectAll(".intervalcell ")
+          .classed("selected", false)
+          .filter((d) => d == this.state.currentInterval)
+          .classed("selected", true);
+
+        return d3.selectAll(".interval")
           .classed("selected", false)
           .filter(function(d) {return d.id == interval.id;})
           .classed("selected", true);
-        this.state.currentInterval = interval;
-        this.deselectInstant()
     }
 
     selectChannel(channel) {
@@ -1065,9 +1091,9 @@ export class Eventer {
             .on("click", function(event){
                 d3.selectAll(".eventcell, .intervalcell").classed("selected", false);
                 d3.select(this).classed("selected", true);
-                d3.selectAll(".event")
+                d3.selectAll(".event, .interval")
                   .classed("selected", false)
-                  .filter((d) => {return d.id == this.__data__.id;})
+                  .filter((d) => {return d == this.__data__;})
                   .classed("selected", true);
                 _this.framer.setFrame(this.__data__.frame || this.__data__.start);
                 _this.timeline.updateIndex(this.__data__.frame || this.__data__.start);
@@ -1195,11 +1221,17 @@ export class Eventer {
         update.selectAll(".intervalcell .estart span")
               .text(d => d.start);
         update.selectAll(".intervalcell .estartt span")
-              .text(d => formatTime(frameToTime(this.framer, d.start)));
+              .text(d => {
+                  if (d.start !== undefined)
+                    formatTime(frameToTime(this.framer, d.start));
+               });
         update.selectAll(".intervalcell .eend span")
               .text(d => d.end);
         update.selectAll(".intervalcell .eendt span")
-              .text(d => formatTime(frameToTime(this.framer, d.end)));
+              .text(d => {
+                  if (d.end !== undefined)
+                    formatTime(frameToTime(this.framer, d.end))
+                });
         update.selectAll(".intervalcell .eclass span")
               .each(function(d) {
                   this.value = d.class === undefined ? "" : d.class;

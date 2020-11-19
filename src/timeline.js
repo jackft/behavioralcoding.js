@@ -390,8 +390,7 @@ export class Timeline {
         interval.append("text")
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
-                .attr("y", d=> (((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2)
-                .text("DOGGGG");
+                .attr("y", d=> (((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2);
 
         return interval;
     }
