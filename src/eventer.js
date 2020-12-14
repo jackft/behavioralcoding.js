@@ -1,7 +1,7 @@
 import {Framer} from "framewrangler";
 import {VidState} from "./vidstate";
 import {Timeline} from "./timeline";
-import {controllDummyKeyboard, formatTime, frameToTime} from "./utils";
+import {controllDummyKeyboard, formatTime, frameToTime, StateTracker} from "./utils";
 import * as d3 from "d3";
 
 const OPTS = {
@@ -32,6 +32,12 @@ const OPTS = {
     ]
 };
 
+export const stateEnum = {
+    IDLE: "idle",
+    READY: "ready",
+    CONFIRM: "confirm",
+    SUBMIT: "submit"
+}
 
 export const eventerEnum = {
     INSTANT: "instant",
@@ -56,8 +62,18 @@ export class Eventer {
 
             undoStack: [],
             redoStack: [],
-            mode: eventerEnum.INSTANT
+            mode: eventerEnum.INSTANT,
+            state: stateEnum.IDLE
         };
+
+        this.events = {
+            "submitted": [],
+            "confirmed": [],
+            "navigated": [],
+            "selected": [],
+            "edited": [],
+            "stateChanged": [],
+        }
         ////////////////////////////////////////////////////////////////////////
         // Set up
         ////////////////////////////////////////////////////////////////////////
@@ -65,24 +81,22 @@ export class Eventer {
         this.element = this.config.element;
         this.framer = this.initFramer(config);
         this.vidstate = this.initVidState(config);
+        this.stateTracker = this.initStateTracker(config);
         this.timeline = this.initTimeline(config);
         this.eventtable = this.initEventTable(config);
         this.classMap = this.initClassMap(config);
         this.channelIndicator = this.initChannelIndicator(config);
+
         this.init();
+
+        // for tracking task duration
+        this.start  = Date.now();
 
         this.keybindings = this.config.keybindings || OPTS.keybindings;
 
         ////////////////////////////////////////////////////////////////////////
         // Events
         ////////////////////////////////////////////////////////////////////////
-        this.events = {
-            "submitted": [],
-            "confirmed": [],
-            "navigated": [],
-            "selected": [],
-            "edited": [],
-        }
 
 
         this.tieEventsTogether();
@@ -100,7 +114,12 @@ export class Eventer {
     }
 
     initFramer(config) {
-        return new Framer(config.element.querySelector("video"), config.fps);
+        const framer = new Framer(config.element.querySelector("video"), config.fps);
+        this.maxFrame = 0;
+        framer.addEventListener("frameupdate", (event) => {
+            this.maxFrame = Math.max(this.maxFrame, event.frame);
+        });
+        return framer
     }
 
     initVidState(config) {
@@ -167,12 +186,15 @@ export class Eventer {
     }
 
     initClassMap(config) {
+        const classes = this.state.mode == eventerEnum.INTERVAL
+                      ? config.classes
+                      : config.classes;
         // sets up the class reference/selction indicator DOM
         const items = d3.select(config.element)
                         .append("div")
                         .attr("class", "class-ref")
                         .selectAll("div")
-                        .data(config.classes).enter()
+                        .data(classes).enter()
                         .append("div")
                           .attr("class", "class-ref-item")
                           .attr("id", function(d){
@@ -188,7 +210,8 @@ export class Eventer {
                  .text(function(d){return d.key});
         // create class map
         const classMap = {};
-        config.classes.forEach(e => {
+
+        classes.forEach(e => {
             classMap[e.key] = {
                 class: e.class,
                 classRef: document.querySelector(`#class-ref-item-${CSS.escape(e.key)}`)
@@ -206,6 +229,24 @@ export class Eventer {
 
         this.state.currentChannel = this.timeline.state.channels[1];
         this.changeChannel();
+    }
+
+    initStateTracker(config) {
+        const progress = [
+            {description: "annotate", states: new Set([stateEnum.IDLE])},
+            {description: "submit (Enter)", states: new Set([stateEnum.READY])},
+            {description: "confirm (Enter)", states: new Set([stateEnum.CONFIRM])},
+        ]
+
+        const stateTracker = new StateTracker(
+            document.querySelector(".progress-steps"),
+            progress,
+            stateEnum.SUBMIT
+
+        );
+
+        this.addEventListener("stateChanged", (event) => stateTracker.update(event));
+        return stateTracker;
     }
 
     init() {
@@ -264,6 +305,7 @@ export class Eventer {
                         // not supposed to be permanent
                         const frame = event.frame;
                         this.state.currentInstant.frame = frame;
+                        this.framer.setFrame(event.frame);
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -280,6 +322,7 @@ export class Eventer {
                             interval.end = interval.down;
                             interval.start = event.frame;
                         }
+                        this.framer.setFrame(event.frame);
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -357,6 +400,7 @@ export class Eventer {
                 const frame = event.frame;
                 instant.frame = frame;
                 instant.dragged = true;
+                this.framer.setFrame(event.frame);
                 this.timeline.update();
                 this.updateEventTable();
             }
@@ -413,6 +457,7 @@ export class Eventer {
                         // not supposed to be permanent
                         const frame = event.frame;
                         this.state.currentInstant.frame = frame;
+                        this.framer.setFrame(event.frame);
                         this.timeline.update();
                         this.updateEventTable();
                     }
@@ -474,6 +519,7 @@ export class Eventer {
                 if (this.state.currentInterval != null) {
                     this.state.currentInterval.dragged = true;
                     this.state.currentInterval.start = event.frame;
+                    this.framer.setFrame(event.frame);
                     this.timeline.update();
                     this.updateEventTable();
                 }
@@ -509,6 +555,7 @@ export class Eventer {
                 if (this.state.currentInterval != null) {
                     this.state.currentInterval.dragged = true;
                     this.state.currentInterval.end = event.frame;
+                    this.framer.setFrame(event.frame);
                     this.timeline.update();
                     this.updateEventTable();
                 }
@@ -583,27 +630,6 @@ export class Eventer {
                     break;
                 case "superForward":
                     this.framer.stepForward(10);
-                    break;
-                case "submit":
-                    if (this.state.state == classifierEnum.SELECTED) {
-                        this.state.state = classifierEnum.CONFIRMED;
-                        this.stateChanged({state: this.state.state});
-                        this.confirmed();
-                    }
-                    else if (this.state.state == classifierEnum.CONFIRMED) {
-                        this.state.state = classifierEnum.SUBMITTED;
-                        this.stateChanged({state: this.state.state});
-                        const end = Date.now();
-                        this.submitted({data:
-                            {
-                                frame: this.framer.getFrame(),
-                                class: this.state.class,
-                                timestamp: end,
-                                workingTime: end - this.start,
-                                maxFrame: this.maxFrame,
-                                numClassChanges: this.numClassChanges
-                            }});
-                    }
                     break;
                 case "speedup":
                     this.framer.speedUp();
@@ -732,6 +758,32 @@ export class Eventer {
                     this.state.currentEventIdx = null;
                     this.state.currentIntervalIdx = null;
                     break;
+
+                case "submit":
+                    if (this.state.state == stateEnum.READY || this.state.state == stateEnum.IDLE) {
+                        this.state.state = stateEnum.CONFIRM;
+                        this.stateChanged({state: this.state.state});
+                        this.confirmed();
+                    }
+                    else if (this.state.state == stateEnum.CONFIRM) {
+                        this.state.state = stateEnum.SUBMIT;
+                        this.stateChanged({state: this.state.state});
+                        const end = Date.now();
+                        console.log(this.state.instants);
+                        const state = prepareOutput(this.state);
+                        this.submitted({
+                            data: {
+                                instants: state.instants,
+                                intervals: state.intervals,
+                                timestamp: end,
+                                workingTime: end - this.start,
+                                maxFrame: this.maxFrame,
+                            },
+                            state: state
+                        });
+                    }
+                    break;
+
                 default:
                     break;
             }
@@ -1050,6 +1102,8 @@ export class Eventer {
     }
 
     do(action) {
+        this.state.state = stateEnum.READY;
+        this.stateChanged({state: this.state.state});
         if (this.state.redoStack.length > 0) {
             this.state.redoStack = [];
         }
@@ -1301,4 +1355,25 @@ function orderElements(mode) {
 function textinpt() {
     const active = document.activeElement;
     return [...document.querySelectorAll("input")].some(e => e === active);
+}
+
+function prepareOutput(state) {
+    state.instants.forEach((instant, i) => {
+        state.instants[i] = {
+            id: instant.id,
+            frame: instant.frame,
+            channel: instant.channel.name,
+            channelid: instant.channel.id
+        }
+    });
+    state.intervals.forEach((interval, i) => {
+        state.intervals[i] = {
+            id: interval.id,
+            start: interval.start,
+            end: interval.end,
+            channel: interval.channel.name,
+            channelid: interval.channel.id
+        }
+    });
+    return state;
 }

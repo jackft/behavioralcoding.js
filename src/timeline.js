@@ -354,43 +354,43 @@ export class Timeline {
         const textHeight = 14;
         interval.append("rect")
                 .attr("x", d=>this.x(d.start))
-                .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-                .attr("height", d=>(h/d.groupSize) - (d.groupIndex + 1 == d.groupSize ? 0 : m))
-                .attr("width", d=>this.x(d.end - d.start));
+                .attr("y", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("height", d=>or0((h/d.groupSize) - (d.groupIndex + 1 == d.groupSize ? 0 : m)))
+                .attr("width", d=>isNaN(d.end - d.start) || (d.end - d.start) < 0 ? 0 : this.x(d.end - d.start));
 
         // for event firings
         interval.append("line")
                 .attr("class", "buffer left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
-                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+                .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         interval.append("line")
                 .attr("class", "buffer right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
-                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+                .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         interval.append("line")
                 .attr("class", "left")
                 .attr("x1", d=>this.x(d.start))
                 .attr("x2", d=>this.x(d.start))
-                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+                .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
                 
         interval.append("line")
                 .attr("class", "right")
                 .attr("x1", d=>this.x(d.end))
                 .attr("x2", d=>this.x(d.end))
-                .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-                .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+                .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+                .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         interval.append("text")
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
-                .attr("y", d=> (((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2);
+                .attr("y", d=> or0(((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2);
 
         return interval;
     }
@@ -403,19 +403,19 @@ export class Timeline {
               .attr("x", d=>this.x(d.start))
               .attr("y", d=>((h/d.groupSize)*(d.groupIndex)) + m)
               .attr("height", d=>(h/d.groupSize) - (d.groupIndex + 1 == d.groupSize ? 0 : m))
-              .attr("width", d=>this.x(d.end - d.start));
+              .attr("width", d=>isNaN(d.end - d.start) || (d.end - d.start) < 0 ? 0 : this.x(d.end - d.start));
 
         update.selectAll("line.left")
               .attr("x1", d=>this.x(d.start))
               .attr("x2", d=>this.x(d.start))
-              .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-              .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+              .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+              .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
         
         update.selectAll("line.right")
               .attr("x1", d=>this.x(d.end))
               .attr("x2", d=>this.x(d.end))
-              .attr("y1", d=>((h/d.groupSize)*(d.groupIndex)) + m)
-              .attr("y2", d=>((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
+              .attr("y1", d=>or0((h/d.groupSize)*(d.groupIndex)) + m)
+              .attr("y2", d=>or0((h/d.groupSize)*(d.groupIndex + 1)) + (d.groupIndex + 1 == d.groupSize ? m : 0));
 
         const _this = this;
         update.selectAll("text")
@@ -436,7 +436,7 @@ export class Timeline {
                 const bottom = (h/d.groupSize)*(d.groupIndex + 1);
                 const margin = (d.groupIndex + 1 == d.groupSize ? m : 0);
                 const textHeight = this.getBoundingClientRect().height;
-                return  (top + bottom + margin + textHeight)/2;
+                return  or0((top + bottom + margin + textHeight)/2);
               });
 
         return update;
@@ -650,15 +650,17 @@ function toparrow(x, y, w=5, h=5) {
 };
 
 function intervalGroups(intervals) {
-    const _intervals = intervals.sort((a, b) => a.start >= b.start);
+    const _intervals = intervals.sort((a, b) => a.start - b.start);
     const groups = [];
     let group = []
     let interval = null;
     for (let i=0; i < _intervals.length; ++i) {
+        // by default first interval forms a group
         if (interval == null) {
             interval = _intervals[i];
             group.push(interval);
         }
+        // if current interval starts before previous ends, they are in same group
         else if (_intervals[i].start <= interval.end) {
             group.push(_intervals[i]);
             if (_intervals[i].end > interval.end) {
@@ -676,10 +678,14 @@ function intervalGroups(intervals) {
     }
     for (let j=0; j < groups.length; ++j) {
         groups[j]
-        .sort((a, b) => a.id < b.id)
+        .sort((a, b) => a.id - b.id)
         .forEach((interval, i) => {
             interval.groupIndex = i;
             interval.groupSize = groups[j].length;
         });
     }
+}
+
+function or0(x) {
+    return isNaN(x) ? 0 : x;
 }
