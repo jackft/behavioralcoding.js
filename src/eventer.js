@@ -117,6 +117,7 @@ export class Eventer {
         const framer = new Framer(config.element.querySelector("video"), config.fps);
         this.maxFrame = 0;
         framer.addEventListener("frameupdate", (event) => {
+            console.log(event);
             this.maxFrame = Math.max(this.maxFrame, event.frame);
         });
         return framer
@@ -576,15 +577,6 @@ export class Eventer {
         ////////////////////////////////////////////////////////////////////////
         //
         ////////////////////////////////////////////////////////////////////////
-        this.timeline.addEventListener("click", (event) => {
-            if (event.sourceEvent.shiftKey) {
-            }
-            else if (this.framer.getFrame() != event.frame) {
-                this.framer.setFrame(event.frame);
-                this.timeline.updateIndex(event.frame);
-            }
-        });
-
 
         window.addEventListener("resize", () => {
             this.positionEventTable(this.eventtable);
@@ -1188,8 +1180,6 @@ export class Eventer {
         cell.each(function() {
             d3.selectAll(".eventcell").classed("selected", false);
             d3.select(this).classed("selected", true);
-            _this.framer.setFrame(this.__data__.frame);
-            _this.timeline.updateIndex(this.__data__.frame);
         });
         if (cell.node() != null) {
             d3.selectAll(".event")
@@ -1259,8 +1249,6 @@ export class Eventer {
         cell.each(function() {
             d3.selectAll(".intervalcell").classed("selected", false);
             d3.select(this).classed("selected", true);
-            _this.framer.setFrame(this.__data__.start);
-            _this.timeline.updateIndex(this.__data__.start);
         });
         if (cell.node() != null) {
             d3.selectAll(".interval")
