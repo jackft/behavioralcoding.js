@@ -166,9 +166,19 @@ export class Eventer {
                              .style("position", "absolute");
         eventtable
             .append("datalist")
-            .attr("id", "classes")
+            .attr("id", "instant-classes")
             .selectAll("option")
             .data(config.classes)
+            .join(
+                enter => enter.append("option")
+                              .attr("value", d=>d.class)
+            );
+
+        eventtable
+            .append("datalist")
+            .attr("id", "interval-classes")
+            .selectAll("option")
+            .data(config.intervalClasses)
             .join(
                 enter => enter.append("option")
                               .attr("value", d=>d.class)
@@ -288,8 +298,7 @@ export class Eventer {
                     const frame = event.frame;
                     const channel = event.subject;
                     const interval = this.createInterval(frame, channel);
-                    this.selectInterval(interval)
-                        ;
+                    this.selectInterval(interval);
                     this.timeline.update();
                     this.updateEventTable();
                     orderElements(this.state.mode);
@@ -436,8 +445,6 @@ export class Eventer {
                 if (this.state.mode == eventerEnum.INTERVAL) {
                     d3.select(event.elem).style("cursor", "move");
                     const interval = event.subject;
-                    interval.down = event.frame;                
-                interval.down = event.frame;                
                     interval.down = event.frame;                
                     interval.downstart = interval.start;
                     interval.downend = interval.end;
@@ -1169,7 +1176,7 @@ export class Eventer {
             .attr("class", "eclass")
             .text("class: ")
             .append("input")
-            .attr("list", "classes")
+            .attr("list", "instant-classes")
             .each(function(d) {
                 this.value = d.clazz === undefined ? "" : d.clazz;
             })
@@ -1237,7 +1244,7 @@ export class Eventer {
             .attr("class", "eclass")
             .text("class: ")
             .append("input")
-            .attr("list", "classes")
+            .attr("list", "interval-classes")
             .each(function(d) {
                 this.value = d.clazz === undefined ? "" : d.clazz;
             })
@@ -1351,7 +1358,8 @@ function prepareOutput(state) {
             id: instant.id,
             frame: instant.frame,
             channel: instant.channel.name,
-            channelid: instant.channel.id
+            channelid: instant.channel.id,
+            "label": instant.clazz
         }
     });
     state.intervals.forEach((interval, i) => {
@@ -1360,7 +1368,8 @@ function prepareOutput(state) {
             start: interval.start,
             end: interval.end,
             channel: interval.channel.name,
-            channelid: interval.channel.id
+            channelid: interval.channel.id,
+            "label": interval.clazz
         }
     });
     return state;

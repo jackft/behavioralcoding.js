@@ -327,6 +327,9 @@ export class Timeline {
              .attr("class", "scale-invariant bottom-arrow")
              .attr("d", d=>d3.line()(bottomarrow(this.x(d.frame), 48, 5, 5)));
 
+        event.append("title")
+             .text(d => d.clazz);
+
         return event;
     }
 
@@ -341,6 +344,9 @@ export class Timeline {
               .attr("x2", d=>this.x(d.frame))
               .attr("y1", 5)
               .attr("y2", 45);
+
+        update.selectAll("title")
+              .text(d => d.clazz);
 
         return update;
     }
@@ -391,7 +397,8 @@ export class Timeline {
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
                 .attr("x", d=> (this.x(d.end) + this.x(d.start)) /2 )
                 .attr("y", d=> or0(((h/d.groupSize)*(d.groupIndex)) + ((h/d.groupSize)*(d.groupIndex + 1) + (d.groupIndex + 1 == d.groupSize ? m : 0)) + textHeight)/2);
-
+        interval.append("title")
+                .text(d => d.clazz);
         return interval;
     }
 
@@ -438,6 +445,9 @@ export class Timeline {
                 const textHeight = this.getBoundingClientRect().height;
                 return  or0((top + bottom + margin + textHeight)/2);
               });
+
+        update.selectAll("title")
+              .text(d => d.clazz);
 
         return update;
     }
