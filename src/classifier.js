@@ -9,7 +9,8 @@ const OPTS = {
         {fun: "slowdown", key: "-", description: "slowdown"},
         {fun: "playpause", key: " ", description: "play/pause"},
         {fun: "submit", key: "enter", description: "submit"},
-    ]
+    ],
+    mutuallyExclusive: true
 };
 
 export const classifierEnum = {
@@ -25,6 +26,7 @@ export class Classifier {
         this.classes = classes;
         this.framer = new Framer(video, fps);
         this.opts = OPTS;
+        this.mutuallyExclusive = opts.mutuallyExclusive || OPTS.mutuallyExclusive;
 
         this.events = {
             "submitted": [],
@@ -35,8 +37,7 @@ export class Classifier {
 
         this.state = {
             state: classifierEnum.IDLE,
-            class: null,
-            classRef: null,
+            classes: {},
         };
 
         // some annotation metadata
@@ -94,7 +95,7 @@ export class Classifier {
     }
 
     bindkeys() {
-        this._bindkeys(this.opts.keybindings);
+        this._bindkeys(this.opts.keybindings || this.OPTS.keybindings);
         return this;
     }
 
@@ -144,7 +145,7 @@ export class Classifier {
                         this.submitted({data:
                             {
                                 frame: this.framer.getFrame(),
-                                class: this.state.class,
+                                classes: Object.keys(this.state.classes),
                                 timestamp: end,
                                 workingTime: end - this.start,
                                 maxFrame: this.maxFrame,
@@ -183,20 +184,23 @@ export class Classifier {
                 this.state.state == classifierEnum.SELECTED ||
                 this.state.state == classifierEnum.CONFIRMED) {
                 const cls = this.classMap[ekey];
-                if (cls !== undefined &&
-                    cls.class != this.state.class) {
-                    // update selection indicator
-                    if (this.state.classRef !== null) {
-                        this.state.classRef.classList.remove("selected")
-                    }
-                    cls.classRef.classList.add("selected");
+                if (cls !== undefined) {
                     // update classifier state
-                    this.state.class = cls.class;
-                    this.state.classRef = cls.classRef;
-                    this.state.state = classifierEnum.SELECTED;
+                    if (cls.class in this.state.classes) {
+                        this.state.classes[cls.class].classList.remove("selected");
+                        delete this.state.classes[cls.class];
+                        if (Object.keys(this.state.classes).length == 0) {
+                            this.state.state = classifierEnum.IDLE;
+                        }
+                    }
+                    else {
+                        this.state.classes[cls.class] = cls.classRef;
+                        cls.classRef.classList.add("selected");
+                        this.state.state = classifierEnum.SELECTED;
+                    }
                     this.stateChanged({state: this.state.state});
                     this.numClassChanges++;
-                };
+                }
             }
         });
         return this;
