@@ -85,6 +85,7 @@ export class Eventer {
         this.timeline = this.initTimeline(config);
         this.eventtable = this.initEventTable(config);
         this.classMap = this.initClassMap(config);
+        this.intervalClassMap = this.initIntervalClassMap(config);
         this.channelIndicator = this.initChannelIndicator(config);
 
         this.init();
@@ -100,7 +101,7 @@ export class Eventer {
 
 
         this.tieEventsTogether();
-        this.bindkeys(this.classMap, this.keybindings);
+        this.bindkeys(this.classMap, this.intervalClassMap, this.keybindings);
         controllDummyKeyboard();
         //
         this.instantIdCounter = 0;
@@ -117,7 +118,6 @@ export class Eventer {
         const framer = new Framer(config.element.querySelector("video"), config.fps);
         this.maxFrame = 0;
         framer.addEventListener("frameupdate", (event) => {
-            console.log(event);
             this.maxFrame = Math.max(this.maxFrame, event.frame);
         });
         return framer
@@ -197,13 +197,45 @@ export class Eventer {
     }
 
     initClassMap(config) {
-        const classes = this.state.mode == eventerEnum.INTERVAL
-                      ? config.classes
-                      : config.classes;
+        const classes = config.classes.filter(clazz => "key" in clazz);
         // sets up the class reference/selction indicator DOM
         const items = d3.select(config.element)
                         .append("div")
-                        .attr("class", "class-ref")
+                        .attr("class", "class-ref instant-class-ref")
+                        .selectAll("div")
+                        .data(classes).enter()
+                        .append("div")
+                          .attr("class", "class-ref-item")
+                          .attr("id", function(d){
+                              return CSS.escape(`class-ref-item-${d.key}`);
+                           });
+        items.append("div")
+             .attr("class", "class-label")
+             .text(function(d){return d.class});
+        items.append("div")
+             .attr("class", function(d){return "key" + " " + CSS.escape(`key-${d.key}`)})
+             .append("div")
+                 .attr("class", "keycap")
+                 .text(function(d){return d.key});
+        // create class map
+        const classMap = {};
+
+        classes.forEach(e => {
+            classMap[e.key] = {
+                class: e.class,
+                classRef: document.querySelector(`#class-ref-item-${CSS.escape(e.key)}`)
+            };
+        });
+        return classMap;
+    }
+
+    initIntervalClassMap(config) {
+        const classes =  config.intervalClasses.filter(clazz => "key" in clazz);
+        // sets up the class reference/selction indicator DOM
+        const items = d3.select(config.element)
+                        .append("div")
+                        .attr("class", "class-ref interval-class-ref")
+                        .style("display", "none")
                         .selectAll("div")
                         .data(classes).enter()
                         .append("div")
@@ -591,7 +623,7 @@ export class Eventer {
         });
     }
 
-    bindkeys(classMap, keybindings) {
+    bindkeys(classMap, intervalClassMap, keybindings) {
         let keymap = {};
         keybindings.forEach(entry => {
             const key = CSS.escape(entry.key.toLowerCase());
@@ -620,6 +652,9 @@ export class Eventer {
 
         document.addEventListener("keydown", (event) => {
             if (textinpt()) {
+                if (event.key == "Enter") {
+                    document.activeElement.blur();
+                }
                 return;
             }
             const fun = keymap[CSS.escape(event.key.toLowerCase()) + event.shiftKey + event.ctrlKey] || "";
@@ -733,9 +768,17 @@ export class Eventer {
                     event.preventDefault();
                     if (this.state.mode == eventerEnum.INSTANT) {
                         this.state.mode = eventerEnum.INTERVAL;
+                        d3.select(".instant-class-ref")
+                          .style("display", "none");
+                        d3.select(".interval-class-ref")
+                          .style("display", undefined);
                     }
                     else if (this.state.mode == eventerEnum.INTERVAL) {
                         this.state.mode = eventerEnum.INSTANT;
+                        d3.select(".instant-class-ref")
+                          .style("display", undefined);
+                        d3.select(".interval-class-ref")
+                          .style("display", "none");
                     }
                     orderElements(this.state.mode);
                     document.querySelector(".emode").innerText = this.state.mode;
@@ -768,7 +811,6 @@ export class Eventer {
                         this.state.state = stateEnum.SUBMIT;
                         this.stateChanged({state: this.state.state});
                         const end = Date.now();
-                        console.log(this.state.instants);
                         const state = prepareOutput(this.state);
                         this.submitted({
                             data: {
@@ -828,6 +870,18 @@ export class Eventer {
                 const clazz = cls.class;
                 const interval = this.createInstant(frame, channel, clazz);
                 this.selectInterval(interval);
+                this.timeline.update();
+                this.updateEventTable();
+                orderElements(this.state.mode);
+            }
+            else if (this.state.mode == eventerEnum.INTERVAL && this.state.currentInterval !== undefined) {
+                // animate key references
+                const ekey = CSS.escape(event.key.toLowerCase());
+                const key = document.querySelectorAll(`.key-${ekey}`);
+                // maybe update class selection, and if so reset selection indicator
+                const cls = intervalClassMap[ekey];
+                if (cls === undefined) return;
+                this.state.currentInterval.clazz = cls.class;
                 this.timeline.update();
                 this.updateEventTable();
                 orderElements(this.state.mode);
@@ -932,7 +986,10 @@ export class Eventer {
                          down: frame,
                          frame: frame,
                          channel: channel,
-                         clazz: clazz};
+                         clazz: clazz,
+                         note: null,
+                         metadata: null
+                        };
         const action = {type: "createInstant", instant: instant};
         this.do(action);
         return instant;
@@ -944,7 +1001,10 @@ export class Eventer {
                           start: frame,
                           end: null,
                           channel: channel,
-                          clazz: clazz}
+                          clazz: clazz,
+                          note: null,
+                          metadata: null
+                        }
         const action = {type: "createInterval", interval: interval};
         this.do(action);
         return interval;
@@ -1142,14 +1202,17 @@ export class Eventer {
             .selectAll(".eventcell, .intervalcell")
             .sort(function(a, b){return (a.frame || a.start) > (b.frame || b.start);})
             .on("click", function(event){
+                console.log("clicked cell");
                 d3.selectAll(".eventcell, .intervalcell").classed("selected", false);
                 d3.select(this).classed("selected", true);
                 d3.selectAll(".event, .interval")
                   .classed("selected", false)
                   .filter((d) => {return d == this.__data__;})
                   .classed("selected", true);
-                _this.framer.setFrame(this.__data__.frame || this.__data__.start);
-                _this.timeline.updateIndex(this.__data__.frame || this.__data__.start);
+                let cellFrame = "frame" in this.__data__ ? this.__data__.frame : this.__data__.start;
+                _this.framer.setFrame(cellFrame);
+                _this.timeline.updateIndex(cellFrame);
+                console.log("done clicked cell");
             })
     }
 
