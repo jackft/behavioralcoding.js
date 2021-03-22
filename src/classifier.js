@@ -1,4 +1,5 @@
 import {Framer} from "framewrangler";
+import {VidState} from "./vidstate";
 import * as d3 from "d3";
 
 const OPTS = {
@@ -21,12 +22,14 @@ export const classifierEnum = {
 };
 
 export class Classifier {
-    constructor(element, video, fps, classes, opts=OPTS) {
-        this.element = element;
-        this.classes = classes;
-        this.framer = new Framer(video, fps);
-        this.opts = OPTS;
-        this.mutuallyExclusive = opts.mutuallyExclusive || OPTS.mutuallyExclusive;
+    constructor(config) {
+        this.config = config;
+        this.element = this.config.element;
+        this.classes = this.config.classes;
+        this.framer = this.initFramer(config);
+        this.vidstate = this.initVidState(config);
+        this.keybindings = this.config["opts"] || OPTS.keybindings;
+        this.mutuallyExclusive = this.config["mutuallyExclusive"] || false;
 
         this.events = {
             "submitted": [],
@@ -44,9 +47,6 @@ export class Classifier {
         this.start = Date.now();
         this.maxFrame = 0;
         this.numClassChanges = 0;
-        this.framer.addEventListener("frameupdate", (event) => {
-            this.maxFrame = Math.max(this.maxFrame, event.frame);
-        });
 
         this.buildReference();
         this.classMap = this._buildClassMap();
@@ -55,6 +55,21 @@ export class Classifier {
 
     init() {
         this.stateChanged({state: this.state.state});
+    }
+
+
+    initFramer(config) {
+        const framer = new Framer(config.element.querySelector("video"), config.fps);
+        this.maxFrame = 0;
+        framer.addEventListener("frameupdate", (event) => {
+            this.maxFrame = Math.max(this.maxFrame, event.frame);
+        });
+        return framer
+    }
+
+
+    initVidState(config) {
+        return new VidState(config.element.querySelector(".vid-state"), this.framer);
     }
 
     //--------------------------------------------------------------------------
@@ -95,7 +110,7 @@ export class Classifier {
     }
 
     bindkeys() {
-        this._bindkeys(this.opts.keybindings || this.OPTS.keybindings);
+        this._bindkeys(this.keybindings || this.OPTS.keybindings);
         return this;
     }
 
