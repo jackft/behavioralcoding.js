@@ -83,46 +83,40 @@ Classify the video as funny or not
   <div>
   <script>
 
-    const classifier = new behavioralcoding.Classifier(
-      document.querySelector("#classifier"),
-      document.querySelector("#vid"),
-      15,
-      [{class: "no", key: "f"}, {class: "yes", key: "j"}],
-      {mutuallyExclusive: false}
-    );
+    const config = {
+      element: document.querySelector("#classifier"),
+      classes: [{class: "no", key: "f"}, {class: "yes", key: "j"}],
+      mutuallyExclusive: true,
+      fps: 30,
+      channels: []
+    }
+    let classifier = null;
 
-    classifier.addEventListener("confirmed", () => {console.log(classifier.state)});
-    classifier.addEventListener("submitted", (event) => {
-      document.write("<pre>" + JSON.stringify(event.data, undefined, 2) + "</pre>");
-    });
-    const vs = new behavioralcoding.VidState(document.querySelector(".vid-state"), classifier.framer);
+    fetch("/test_assets/track.json")
+      .then(response => response.json())
+      .then(json => {
+        config["timeline"] = {"waveform": json};
+        classifier = new behavioralcoding.Classifier(config);
+        classifier.addEventListener("confirmed", () => {console.log(classifier.state)});
+        classifier.addEventListener("submitted", (event) => {
+          document.write("<pre>" + JSON.stringify(event.data, undefined, 2) + "</pre>");
+        });
 
-    const progressStates = [
-             {description: "classify (key)",
-              states: new Set([behavioralcoding.classifierEnum.IDLE])},
-             {description: "confirm (Enter)", 
-              states: new Set([behavioralcoding.classifierEnum.SELECTED])},
-             {description: "submit (Enter)", 
-              states: new Set([behavioralcoding.classifierEnum.CONFIRMED])}
-    ];
-    const st = new behavioralcoding.StateTracker(document.querySelector(".progress-steps"),
-                                                 progressStates,
-                                                 behavioralcoding.classifierEnum.SUBMITTED);
-    classifier.addEventListener("stateChanged", (event) => st.update(event));
-    behavioralcoding.controllDummyKeyboard();
-    classifier.framer.video.addEventListener("loadeddata", () => {
-      const tl = new behavioralcoding.Timeline(document.querySelector(".timeline"),
-                                               Math.floor(classifier.framer.video.duration / classifier.framer.FRAME_DURATION));
-      classifier.framer.addEventListener("frameupdate", function(event) {
-        tl.updateIndex(event.frame);
-      });
-      tl.addEventListener("frameupdate", function(event){classifier.framer.setFrame(event.frame)});
 
-      fetch("/test_assets/track.json")
-        .then(response => response.json())
-        .then(json => tl.addChannel("audio", {waveform: json}));
+        const progressStates = [
+                 {description: "classify (key)",
+                  states: new Set([behavioralcoding.classifierEnum.IDLE])},
+                 {description: "confirm (Enter)", 
+                  states: new Set([behavioralcoding.classifierEnum.SELECTED])},
+                 {description: "submit (Enter)", 
+                  states: new Set([behavioralcoding.classifierEnum.CONFIRMED])}
+        ];
 
-      classifier.init();
+        const st = new behavioralcoding.StateTracker(document.querySelector(".progress-steps"),
+                                                     progressStates,
+                                                     behavioralcoding.classifierEnum.SUBMITTED);
+        classifier.addEventListener("stateChanged", (event) => st.update(event));
+        behavioralcoding.controllDummyKeyboard();
     });
 
     // prevent scroll

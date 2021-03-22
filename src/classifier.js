@@ -1,5 +1,6 @@
 import {Framer} from "framewrangler";
 import {VidState} from "./vidstate";
+import {Timeline} from "./timeline";
 import * as d3 from "d3";
 
 const OPTS = {
@@ -28,6 +29,7 @@ export class Classifier {
         this.classes = this.config.classes;
         this.framer = this.initFramer(config);
         this.vidstate = this.initVidState(config);
+        this.timeline = this.initTimeline(config);
         this.keybindings = this.config["opts"] || OPTS.keybindings;
         this.mutuallyExclusive = this.config["mutuallyExclusive"] || false;
 
@@ -51,6 +53,8 @@ export class Classifier {
         this.buildReference();
         this.classMap = this._buildClassMap();
         this.bindkeys();
+
+        this.init();
     }
 
     init() {
@@ -70,6 +74,27 @@ export class Classifier {
 
     initVidState(config) {
         return new VidState(config.element.querySelector(".vid-state"), this.framer);
+    }
+
+
+    initTimeline(config) {
+        const frames = Math.floor(this.framer.video.duration / this.framer.FRAME_DURATION);
+        const timeline = new Timeline(config.element.querySelector(".timeline"),
+                                      frames,
+                                      {height: (config.channels.length + 1)  * 50,
+                                       channelHeight: 50});
+        timeline.addChannel("audio", {waveform: config.timeline.waveform});
+        this.config.channels.forEach(channel => {
+            timeline.addChannel(channel.name).update();
+        });
+
+        this.framer.addEventListener("frameupdate", (event) => {
+            timeline.updateIndex(event.frame);
+        });
+        timeline.addEventListener("frameupdate", (event) => {
+            this.framer.setFrame(event.frame)
+        });
+        return timeline;
     }
 
     //--------------------------------------------------------------------------
